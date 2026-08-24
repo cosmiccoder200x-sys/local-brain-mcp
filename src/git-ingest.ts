@@ -6,7 +6,7 @@
  *
  * Solves the "git noise" problem:
  *  ✅ IGNORES: WIP, typo, temp, format, bump version, lint commits
- *  ✅ INCLUDES: fix:/feat:/refactor:, PR merges, bug/revert commits
+ *  ✅ INCLUDES: fix:/feat:/refactor:, breaking changes (!), PR merges, bug/revert commits
  */
 
 import Database from 'better-sqlite3';
@@ -14,7 +14,6 @@ import simpleGit, { type DefaultLogFields, type SimpleGit } from 'simple-git';
 import { embed } from './embeddings.js';
 import {
   insertMemory,
-  insertEmbedding,
   isCommitIngested,
   markCommitIngested,
   upsertFileSnapshot,
@@ -42,13 +41,14 @@ const IGNORE_PATTERNS: RegExp[] = [
 
 /** Commits matching these patterns are INCLUDED (high-signal). */
 const INCLUDE_PATTERNS: RegExp[] = [
-  /^fix(\(.+\))?:\s/i,           // Conventional: fix:
-  /^feat(\(.+\))?:\s/i,          // Conventional: feat:
-  /^refactor(\(.+\))?:\s/i,      // Conventional: refactor:
-  /^perf(\(.+\))?:\s/i,          // Conventional: perf:
-  /^revert(\(.+\))?:\s/i,        // Revert commit
+  /^fix(\(.+\))?!?:\s/i,         // Conventional: fix: or fix!:
+  /^feat(\(.+\))?!?:\s/i,        // Conventional: feat: or feat!:
+  /^refactor(\(.+\))?!?:\s/i,    // Conventional: refactor:
+  /^perf(\(.+\))?!?:\s/i,        // Conventional: perf:
+  /^revert(\(.+\))?!?:\s/i,      // Revert commit
   /^Merge pull request #\d+/,    // GitHub PR merge
   /^Merge branch .+ into/,       // GitLab/manual branch merge
+  /BREAKING CHANGE/i,            // Conventional breaking change footer
   /resolves?\s+#\d+/i,           // Issue reference
   /fixes?\s+#\d+/i,              // Issue fix reference
   /closes?\s+#\d+/i,             // Issue close reference
@@ -61,6 +61,7 @@ const INCLUDE_PATTERNS: RegExp[] = [
 
 function inferCategory(message: string): MemoryCategory {
   const m = message.toLowerCase();
+  if (/BREAKING CHANGE|!:/i.test(m))                 return 'architecture';
   if (/^fix|fixes?|bug|regression|hotfix/.test(m)) return 'fix';
   if (/^feat/.test(m))                               return 'architecture';
   if (/^refactor/.test(m))                           return 'convention';
@@ -81,7 +82,6 @@ interface CommitData {
 
 /**
  * Build a compact plain-English summary of a commit suitable for embedding.
- * Kept under ~200 words to stay within embedding model token limits.
  */
 function buildCommitSummary(commit: CommitData): string {
   const files = commit.files.slice(0, 5).join(', ');
@@ -89,11 +89,11 @@ function buildCommitSummary(commit: CommitData): string {
     ? ` (+${commit.files.length - 5} more)`
     : '';
 
-  // Truncate diff to first 500 chars to keep context compact
   const diffSnippet = commit.diff.slice(0, 500).trim();
+  const isBreaking = /BREAKING CHANGE|!:/i.test(commit.message) ? '[BREAKING CHANGE] ' : '';
 
   return [
-    `Commit: ${commit.message.trim()}`,
+    `Commit: ${isBreaking}${commit.message.trim()}`,
     `Files: ${files}${extraFiles}`,
     diffSnippet ? `Diff snippet:\n${diffSnippet}` : '',
   ].filter(Boolean).join('\n');
@@ -102,16 +102,12 @@ function buildCommitSummary(commit: CommitData): string {
 // ─── Signal Filter ────────────────────────────────────────────────────────────
 
 export function isHighSignalCommit(message: string): boolean {
-  // Reject if matches any ignore pattern
   for (const pattern of IGNORE_PATTERNS) {
     if (pattern.test(message)) return false;
   }
-
-  // Accept if matches any include pattern
   for (const pattern of INCLUDE_PATTERNS) {
     if (pattern.test(message)) return true;
   }
-
   return false;
 }
 
@@ -121,7 +117,7 @@ export interface IngestOptions {
   repoPath:  string;
   maxCommits: number;
   dbPath?:   string;
-  since?:    string;   // e.g. '6 months ago'
+  since?:    string;
   verbose?:  boolean;
 }
 
@@ -132,9 +128,6 @@ export interface IngestResult {
   errors:    number;
 }
 
-/**
- * Scan git history, filter high-signal commits, embed, and store in brain DB.
- */
 export async function ingestGitHistory(
   db: Database.Database,
   options: IngestOptions
@@ -152,8 +145,6 @@ export async function ingestGitHistory(
     return result;
   }
 
-  // Fetch commit log
-  const logArgs = ['--oneline', '--no-merges', `--since="${since}"`];
   const log = await git.log({
     maxCount: maxCommits,
     '--since': since,
@@ -169,13 +160,11 @@ export async function ingestGitHistory(
     const hash    = commit.hash;
     const message = commit.message;
 
-    // Skip already-ingested commits
     if (isCommitIngested(db, hash)) {
       result.skipped++;
       continue;
     }
 
-    // Apply signal filter
     if (!isHighSignalCommit(message)) {
       result.skipped++;
       if (verbose) console.error(`[ingest] SKIP  ${hash.slice(0, 7)} — ${message.slice(0, 60)}`);
@@ -183,7 +172,6 @@ export async function ingestGitHistory(
     }
 
     try {
-      // Get diff for this commit
       const diff = await git.diff([`${hash}^`, hash]).catch(() => '');
       const showOut = await git.show(['--stat', '--format=', hash]);
       const changedFiles = showOut
@@ -202,11 +190,8 @@ export async function ingestGitHistory(
 
       const summary  = buildCommitSummary(commitData);
       const category = inferCategory(message);
+      const embedding = embed(summary);
 
-      // Generate embedding
-      const embedding = await embed(summary);
-
-      // Store in DB — use first changed file as primary scope
       const primaryFile  = changedFiles[0] ?? null;
       const packageScope = derivePackageScope(primaryFile);
 
@@ -214,20 +199,22 @@ export async function ingestGitHistory(
         ? (await git.show([`${hash}:${primaryFile}`]).catch(() => '')).split('\n').length
         : 0;
 
-      const rowid = insertMemory(db, {
-        category,
-        content:      message,
-        summary:      summary.slice(0, 500),
-        file_path:    primaryFile,
-        package_scope: packageScope,
-        commit_hash:  hash,
-        git_ref:      currentRef,
-        status:       'active',
-        source:       'git-ingest',
-        token_count:  Math.ceil(summary.length / 4),
-      });
-
-      insertEmbedding(db, rowid, embedding);
+      insertMemory(
+        db,
+        {
+          category,
+          content:      message,
+          summary:      summary.slice(0, 500),
+          file_path:    primaryFile,
+          package_scope: packageScope,
+          commit_hash:  hash,
+          git_ref:      currentRef,
+          status:       'active',
+          source:       'git-ingest',
+          token_count:  Math.ceil(summary.length / 4),
+        },
+        embedding
+      );
 
       if (primaryFile) {
         upsertFileSnapshot(db, primaryFile, hash, lineCount);
@@ -246,9 +233,6 @@ export async function ingestGitHistory(
   return result;
 }
 
-/**
- * Process a single commit (called from the post-commit git hook).
- */
 export async function ingestSingleCommit(
   db: Database.Database,
   repoPath: string,

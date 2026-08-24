@@ -1,11 +1,13 @@
 /**
- * cli.ts — `npx local-brain` setup wizard & ingest CLI.
+ * cli.ts — `npx local-brain` setup wizard, diagnostics & CLI runner.
  *
  * Commands:
  *  local-brain init    — auto-detects editors & writes MCP configs
  *  local-brain ingest  — run git ingestion on current repo
- *  local-brain status  — show DB stats
- *  local-brain prune   — remove stale memories
+ *  local-brain query   — test semantic recall directly from CLI
+ *  local-brain doctor  — system diagnostics & configuration checker
+ *  local-brain status  — show DB memory statistics
+ *  local-brain prune   — remove stale/deprecated memories
  */
 
 import { program } from 'commander';
@@ -17,6 +19,7 @@ import simpleGit from 'simple-git';
 import { getDb, resolveDbPath, pruneByStatus } from './db.js';
 import { ingestGitHistory } from './git-ingest.js';
 import { runInvalidationPass } from './invalidation.js';
+import { recallMemories, formatRecallMarkdown } from './recall.js';
 
 // ─── Editor Config Paths ──────────────────────────────────────────────────────
 
@@ -25,7 +28,7 @@ const HOME = os.homedir();
 interface EditorTarget {
   name:       string;
   configPath: string;
-  key:        string;  // JSON key to write into
+  key:        string;
 }
 
 const EDITOR_TARGETS: EditorTarget[] = [
@@ -56,8 +59,6 @@ const EDITOR_TARGETS: EditorTarget[] = [
   },
 ];
 
-// ─── MCP Server Entry ─────────────────────────────────────────────────────────
-
 function buildMcpEntry(serverPath: string) {
   return {
     command: 'node',
@@ -66,15 +67,12 @@ function buildMcpEntry(serverPath: string) {
   };
 }
 
-// ─── Post-commit Hook ─────────────────────────────────────────────────────────
-
 function writePostCommitHook(repoPath: string) {
   const hooksDir  = path.join(repoPath, '.git', 'hooks');
   const hookPath  = path.join(hooksDir, 'post-commit');
 
   const script = `#!/bin/sh
 # local-brain post-commit hook
-# Asynchronously ingests the latest commit into the local brain DB.
 (node "$(npm root -g)/local-brain-mcp/dist/cli.js" ingest --commits 1 --quiet &) 2>/dev/null
 `;
 
@@ -83,12 +81,12 @@ function writePostCommitHook(repoPath: string) {
   console.log(`  ✅ post-commit hook installed at ${hookPath}`);
 }
 
-// ─── Commands ─────────────────────────────────────────────────────────────────
+// ─── CLI Program ──────────────────────────────────────────────────────────────
 
 program
   .name('local-brain')
   .description('Local-first, zero-latency AI memory MCP server')
-  .version('1.0.0');
+  .version('1.1.0');
 
 // ── init ──────────────────────────────────────────────────────────────────────
 program
@@ -116,7 +114,6 @@ program
         continue;
       }
 
-      // Read existing config or start fresh
       let config: Record<string, unknown> = {};
       if (existsSync(editor.configPath)) {
         try {
@@ -126,7 +123,6 @@ program
         }
       }
 
-      // Inject MCP server entry
       const key = editor.key as keyof typeof config;
       if (!config[key]) config[key] = {};
       (config[key] as Record<string, unknown>)['local-brain'] = entry;
@@ -143,7 +139,6 @@ program
       console.log(JSON.stringify({ 'local-brain': entry }, null, 2));
     }
 
-    // Install post-commit hook
     if (opts.hook !== false) {
       const repoPath = opts.repo as string;
       const gitDir   = path.join(repoPath, '.git');
@@ -194,6 +189,59 @@ program
       console.log(`   Skipped:  ${result.skipped}`);
       console.log(`   Errors:   ${result.errors}\n`);
     }
+  });
+
+// ── query ─────────────────────────────────────────────────────────────────────
+program
+  .command('query <text>')
+  .description('Test semantic memory recall directly from CLI')
+  .option('--repo <path>', 'Repo root', process.cwd())
+  .option('--file <path>', 'File path filter')
+  .action(async (text, opts) => {
+    const repoPath = path.resolve(opts.repo as string);
+    const db       = getDb(resolveDbPath(repoPath));
+
+    const start = performance.now();
+    const result = await recallMemories(db, {
+      query: text,
+      file_path: opts.file,
+    });
+    const elapsed = (performance.now() - start).toFixed(2);
+
+    console.log(`\n${formatRecallMarkdown(result, text)}`);
+    console.log(`\n⚡ Recall latency: ${elapsed} ms | Tokens: ${result.total_tokens}/250\n`);
+  });
+
+// ── doctor ────────────────────────────────────────────────────────────────────
+program
+  .command('doctor')
+  .description('Run system diagnostics and verify MCP editor configurations')
+  .action(() => {
+    console.log('\n🩺 local-brain doctor\n');
+    console.log(`  Node.js version:   ${process.version} (>=18.0.0 required)`);
+    console.log(`  Platform:          ${process.platform} (${process.arch})`);
+
+    const dbPath = resolveDbPath();
+    console.log(`  Default DB path:   ${dbPath}`);
+    console.log(`  DB file exists:    ${existsSync(dbPath) ? '✅ YES' : 'ℹ️ NO (will be created on first ingest)'}`);
+
+    console.log('\n  Editor Configurations:');
+    for (const editor of EDITOR_TARGETS) {
+      if (existsSync(editor.configPath)) {
+        try {
+          const config = JSON.parse(readFileSync(editor.configPath, 'utf8'));
+          const key = editor.key as keyof typeof config;
+          const servers = config[key] as Record<string, unknown> | undefined;
+          const configured = Boolean(servers && servers['local-brain']);
+          console.log(`    • ${editor.name.padEnd(16)}: ${configured ? '✅ CONFIGURED' : '⚠️ FILE EXISTS, MCP NOT LINKED'}`);
+        } catch {
+          console.log(`    • ${editor.name.padEnd(16)}: ⚠️ INVALID JSON`);
+        }
+      } else {
+        console.log(`    • ${editor.name.padEnd(16)}: ⏭ NOT INSTALLED`);
+      }
+    }
+    console.log('\n  All checks complete.\n');
   });
 
 // ── status ────────────────────────────────────────────────────────────────────
@@ -251,5 +299,4 @@ program
     console.log(`\n🧹 Pruned ${removed} ${opts.status} memories.\n`);
   });
 
-// ─── Run ──────────────────────────────────────────────────────────────────────
 program.parse();
