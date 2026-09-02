@@ -1,3 +1,4 @@
+[![M8ven Score](https://m8ven.ai/badge/mcp/cosmiccoder200x-sys-local-brain-mcp-1eus5c)](https://m8ven.ai/mcp/cosmiccoder200x-sys-local-brain-mcp-1eus5c)
 # 🧠 local-brain-mcp
 
 > **Local-first, zero-latency, git-aware AI memory for Claude Code, Cursor, Copilot & Windsurf.**
