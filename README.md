@@ -154,5 +154,5 @@ Claude Code / Cursor / Copilot / Windsurf / Zed
 ## License
 
 MIT — build freely.
-[![M8ven Score](https://m8ven.ai/badge/mcp/cosmiccoder200x-sys-local-brain-mcp-1eus5c)](https://m8ven.ai/mcp/cosmiccoder200x-sys-local-brain-mcp-1eus5c)
+
 
