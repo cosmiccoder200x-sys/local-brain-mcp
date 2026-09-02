@@ -8,11 +8,12 @@
     "local-brain": "dist/cli.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-schema.mjs",
     "start": "node dist/mcp-server.js",
     "init": "node dist/cli.js init",
     "ingest": "node dist/cli.js ingest",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "test": "npm run build && node --test tests/*.test.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.5.0",

@@ -65,6 +65,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
                 },
                 required: ['query'],
             },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
         },
         {
             name: 'brain_learn',
@@ -93,6 +99,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
                 },
                 required: ['lesson'],
             },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
         },
         {
             name: 'brain_trace',
@@ -110,6 +122,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
                     },
                 },
                 required: ['file_path'],
+            },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
             },
         },
         {
@@ -134,6 +152,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
                         default: false,
                     },
                 },
+            },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: true,
+                openWorldHint: false,
             },
         },
     ],
