@@ -10,7 +10,7 @@
  */
 
 import Database from 'better-sqlite3';
-import simpleGit, { type DefaultLogFields, type SimpleGit } from 'simple-git';
+import { simpleGit, type DefaultLogFields, type SimpleGit } from 'simple-git';
 import { embed } from './embeddings.js';
 import {
   insertMemory,
@@ -19,7 +19,7 @@ import {
   upsertFileSnapshot,
   type MemoryCategory,
 } from './db.js';
-import { derivePackageScope } from './scoping.js';
+import { derivePackageScope, sanitizeFilePath } from './scoping.js';
 
 // ─── Filter Patterns ──────────────────────────────────────────────────────────
 
@@ -57,33 +57,43 @@ const INCLUDE_PATTERNS: RegExp[] = [
   /\bhotfix\b/i,                 // Hotfix commits
 ];
 
-// ─── Category Inference ───────────────────────────────────────────────────────
+// ─── Category & Importance Inference ──────────────────────────────────────────
 
-function inferCategory(message: string): MemoryCategory {
+export function inferCategory(message: string): MemoryCategory {
   const m = message.toLowerCase();
-  if (/BREAKING CHANGE|!:/i.test(m))                 return 'architecture';
+  if (/BREAKING CHANGE|!:/i.test(m))               return 'architecture';
   if (/^fix|fixes?|bug|regression|hotfix/.test(m)) return 'fix';
-  if (/^feat/.test(m))                               return 'architecture';
-  if (/^refactor/.test(m))                           return 'convention';
-  if (/^perf/.test(m))                               return 'fix';
-  if (/^revert/.test(m))                             return 'bug';
+  if (/^feat/.test(m))                             return 'architecture';
+  if (/^refactor/.test(m))                         return 'convention';
+  if (/^perf/.test(m))                             return 'fix';
+  if (/^revert/.test(m))                           return 'bug';
   return 'convention';
+}
+
+export function inferImportance(message: string): number {
+  const m = message.toLowerCase();
+  if (/BREAKING CHANGE|!:/i.test(m)) return 1.5;
+  if (/security|vulnerability|cve/i.test(m)) return 1.4;
+  if (/hotfix|regression/i.test(m)) return 1.3;
+  if (/^fix/i.test(m)) return 1.2;
+  if (/^feat/i.test(m)) return 1.1;
+  return 1.0;
 }
 
 // ─── Commit Content Builder ───────────────────────────────────────────────────
 
 interface CommitData {
-  hash:     string;
-  message:  string;
-  diff:     string;
-  files:    string[];
-  ref:      string;
+  hash:    string;
+  message: string;
+  diff:    string;
+  files:   string[];
+  ref:     string;
 }
 
 /**
  * Build a compact plain-English summary of a commit suitable for embedding.
  */
-function buildCommitSummary(commit: CommitData): string {
+export function buildCommitSummary(commit: CommitData): string {
   const files = commit.files.slice(0, 5).join(', ');
   const extraFiles = commit.files.length > 5
     ? ` (+${commit.files.length - 5} more)`
@@ -94,7 +104,7 @@ function buildCommitSummary(commit: CommitData): string {
 
   return [
     `Commit: ${isBreaking}${commit.message.trim()}`,
-    `Files: ${files}${extraFiles}`,
+    files ? `Files: ${files}${extraFiles}` : '',
     diffSnippet ? `Diff snippet:\n${diffSnippet}` : '',
   ].filter(Boolean).join('\n');
 }
@@ -102,6 +112,7 @@ function buildCommitSummary(commit: CommitData): string {
 // ─── Signal Filter ────────────────────────────────────────────────────────────
 
 export function isHighSignalCommit(message: string): boolean {
+  if (!message || typeof message !== 'string') return false;
   for (const pattern of IGNORE_PATTERNS) {
     if (pattern.test(message)) return false;
   }
@@ -114,18 +125,18 @@ export function isHighSignalCommit(message: string): boolean {
 // ─── Ingestion Pipeline ───────────────────────────────────────────────────────
 
 export interface IngestOptions {
-  repoPath:  string;
-  maxCommits: number;
-  dbPath?:   string;
-  since?:    string;
-  verbose?:  boolean;
+  repoPath:    string;
+  maxCommits?: number;
+  dbPath?:     string;
+  since?:      string;
+  verbose?:    boolean;
 }
 
 export interface IngestResult {
-  scanned:   number;
-  ingested:  number;
-  skipped:   number;
-  errors:    number;
+  scanned:  number;
+  ingested: number;
+  skipped:  number;
+  errors:   number;
 }
 
 export async function ingestGitHistory(
@@ -141,16 +152,20 @@ export async function ingestGitHistory(
   try {
     currentRef = (await git.revparse(['--abbrev-ref', 'HEAD'])).trim();
   } catch {
-    console.error('[ingest] Not a git repository or no commits found.');
+    if (verbose) console.error('[ingest] Not a git repository or no commits found.');
     return result;
   }
 
-  const log = await git.log({
-    maxCount: maxCommits,
-    '--since': since,
-  });
-
-  const commits: readonly DefaultLogFields[] = log.all;
+  let commits: readonly DefaultLogFields[] = [];
+  try {
+    const log = await git.log({
+      maxCount: maxCommits,
+      '--since': since,
+    });
+    commits = log.all;
+  } catch {
+    return result;
+  }
 
   if (verbose) console.error(`[ingest] Found ${commits.length} commits to scan.`);
 
@@ -173,12 +188,16 @@ export async function ingestGitHistory(
 
     try {
       const diff = await git.diff([`${hash}^`, hash]).catch(() => '');
-      const showOut = await git.show(['--stat', '--format=', hash]);
-      const changedFiles = showOut
+      const showOut = await git.show(['--stat', '--format=', hash]).catch(() => '');
+      const rawFiles = showOut
         .split('\n')
-        .filter(l => l.includes('|'))
-        .map(l => l.split('|')[0].trim())
+        .filter((l: string) => l.includes('|'))
+        .map((l: string) => l.split('|')[0]?.trim() ?? '')
         .filter(Boolean);
+
+      const changedFiles = rawFiles
+        .map(f => sanitizeFilePath(f))
+        .filter((f): f is string => f !== null);
 
       const commitData: CommitData = {
         hash,
@@ -188,16 +207,23 @@ export async function ingestGitHistory(
         ref: currentRef,
       };
 
-      const summary  = buildCommitSummary(commitData);
-      const category = inferCategory(message);
-      const embedding = embed(summary);
+      const summary    = buildCommitSummary(commitData);
+      const category   = inferCategory(message);
+      const importance = inferImportance(message);
+      const embedding  = embed(summary);
 
       const primaryFile  = changedFiles[0] ?? null;
       const packageScope = derivePackageScope(primaryFile);
 
-      const lineCount = primaryFile
-        ? (await git.show([`${hash}:${primaryFile}`]).catch(() => '')).split('\n').length
-        : 0;
+      let lineCount = 0;
+      if (primaryFile) {
+        try {
+          const content = await git.show([`${hash}:${primaryFile}`]);
+          lineCount = content.split('\n').length;
+        } catch {
+          lineCount = 0;
+        }
+      }
 
       insertMemory(
         db,
@@ -212,6 +238,8 @@ export async function ingestGitHistory(
           status:       'active',
           source:       'git-ingest',
           token_count:  Math.ceil(summary.length / 4),
+          importance,
+          confidence:   1.0,
         },
         embedding
       );
@@ -240,17 +268,21 @@ export async function ingestSingleCommit(
 ): Promise<boolean> {
   const git: SimpleGit = simpleGit(repoPath);
 
-  const log = await git.log({ maxCount: 1, from: hash, to: hash });
-  if (!log.all.length) return false;
+  try {
+    const log = await git.log({ maxCount: 1, from: hash, to: hash });
+    if (!log.all.length) return false;
 
-  const commit = log.all[0];
-  if (!isHighSignalCommit(commit.message)) return false;
+    const commit = log.all[0];
+    if (!isHighSignalCommit(commit.message)) return false;
 
-  const result = await ingestGitHistory(db, {
-    repoPath,
-    maxCommits: 1,
-    since: '1 day ago',
-  });
+    const result = await ingestGitHistory(db, {
+      repoPath,
+      maxCommits: 1,
+      since: '7 days ago',
+    });
 
-  return result.ingested > 0;
+    return result.ingested > 0;
+  } catch {
+    return false;
+  }
 }

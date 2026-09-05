@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS memories (
   source        TEXT DEFAULT 'git-ingest'
                      CHECK(source IN ('git-ingest', 'manual', 'session')),
   token_count   INTEGER DEFAULT 0,      -- pre-computed token count of summary
+  importance    REAL DEFAULT 1.0,       -- importance multiplier (0.5 to 2.0)
+  confidence    REAL DEFAULT 1.0,       -- confidence score (0.0 to 1.0)
   embedding     BLOB,                   -- Float32Array stored as raw binary BLOB (384 floats)
   created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -52,8 +54,6 @@ CREATE TABLE IF NOT EXISTS file_snapshots (
   line_count    INTEGER DEFAULT 0,
   updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
 );
-
-CREATE INDEX IF NOT EXISTS idx_snapshots_file ON file_snapshots(file_path);
 
 -- ------------------------------------------------------------
 -- Ingestion log

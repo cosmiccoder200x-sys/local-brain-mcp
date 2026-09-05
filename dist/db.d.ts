@@ -21,6 +21,8 @@ export interface Memory {
     status: MemoryStatus;
     source: MemorySource;
     token_count: number;
+    importance?: number;
+    confidence?: number;
     embedding: Buffer | null;
     created_at: string;
     updated_at: string;
@@ -32,13 +34,28 @@ export interface FileSnapshot {
     line_count: number;
     updated_at: string;
 }
+export interface DatabaseStats {
+    total: number;
+    active: number;
+    stale: number;
+    deprecated: number;
+    fromGit: number;
+    manual: number;
+    commitsIngested: number;
+    sizeBytes: number;
+    dbPath: string;
+}
 export declare function getDb(dbPath?: string): Database.Database;
+export declare function closeDb(): void;
 export declare function insertMemory(db: Database.Database, fields: Omit<Memory, 'id' | 'created_at' | 'updated_at' | 'embedding'>, embedding?: Float32Array): number;
 export declare function insertEmbedding(db: Database.Database, id: number, embedding: Float32Array): void;
+export declare function deleteMemory(db: Database.Database, id: number): boolean;
+export declare function findExactDuplicate(db: Database.Database, content: string, filePath?: string | null): Memory | null;
 export declare function markMemoryStale(db: Database.Database, id: number): void;
 export declare function markMemoryDeprecated(db: Database.Database, id: number): void;
 export declare function getActiveMemoriesByFile(db: Database.Database, filePath: string): Memory[];
 export declare function pruneByStatus(db: Database.Database, status: MemoryStatus | 'all'): number;
+export declare function getDatabaseStats(db: Database.Database, dbPath?: string): DatabaseStats;
 export declare function upsertFileSnapshot(db: Database.Database, filePath: string, commitHash: string, lineCount: number): void;
 export declare function getFileSnapshot(db: Database.Database, filePath: string): FileSnapshot | null;
 export declare function isCommitIngested(db: Database.Database, hash: string): boolean;

@@ -1,25 +1,40 @@
+#!/usr/bin/env node
 /**
- * cli.ts — `npx local-brain` setup wizard, diagnostics & CLI runner.
+ * cli.ts — `local-brain` setup wizard, diagnostics & CLI runner.
  *
  * Commands:
  *  local-brain init    — auto-detects editors & writes MCP configs
  *  local-brain ingest  — run git ingestion on current repo
  *  local-brain query   — test semantic recall directly from CLI
- *  local-brain doctor  — system diagnostics & configuration checker
+ *  local-brain learn   — manually store a lesson or rule
  *  local-brain status  — show DB memory statistics
+ *  local-brain doctor  — system diagnostics & configuration checker
  *  local-brain prune   — remove stale/deprecated memories
+ *  local-brain forget  — delete a specific memory by ID
  */
 
 import { program } from 'commander';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import os   from 'os';
+import os from 'os';
 import path from 'path';
-import simpleGit from 'simple-git';
+import { fileURLToPath } from 'url';
+import { simpleGit } from 'simple-git';
 
-import { getDb, resolveDbPath, pruneByStatus } from './db.js';
+import {
+  getDb,
+  resolveDbPath,
+  pruneByStatus,
+  deleteMemory,
+  insertMemory,
+  insertEmbedding,
+  getDatabaseStats,
+  type MemoryCategory,
+} from './db.js';
+import { embed, estimateTokens } from './embeddings.js';
 import { ingestGitHistory } from './git-ingest.js';
 import { runInvalidationPass } from './invalidation.js';
 import { recallMemories, formatRecallMarkdown } from './recall.js';
+import { derivePackageScope, sanitizeFilePath } from './scoping.js';
 
 // ─── Editor Config Paths ──────────────────────────────────────────────────────
 
@@ -68,12 +83,12 @@ function buildMcpEntry(serverPath: string) {
 }
 
 function writePostCommitHook(repoPath: string) {
-  const hooksDir  = path.join(repoPath, '.git', 'hooks');
-  const hookPath  = path.join(hooksDir, 'post-commit');
+  const hooksDir = path.join(repoPath, '.git', 'hooks');
+  const hookPath = path.join(hooksDir, 'post-commit');
 
   const script = `#!/bin/sh
 # local-brain post-commit hook
-(node "$(npm root -g)/local-brain-mcp/dist/cli.js" ingest --commits 1 --quiet &) 2>/dev/null
+(node "$(npm root -g 2>/dev/null || echo .)/local-brain-mcp/dist/cli.js" ingest --commits 1 --quiet &) 2>/dev/null
 `;
 
   mkdirSync(hooksDir, { recursive: true });
@@ -94,11 +109,9 @@ program
   .description('Auto-detect AI editors and write MCP config for each')
   .option('--repo <path>', 'Repo root (defaults to cwd)', process.cwd())
   .option('--no-hook', 'Skip post-commit hook installation')
-  .action(async (opts) => {
-    const serverEntrypoint = path.resolve(
-      new URL(import.meta.url).pathname,
-      '../../dist/mcp-server.js'
-    );
+  .action(async (opts: { repo: string; hook: boolean }) => {
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const serverEntrypoint = path.resolve(__dirname, 'mcp-server.js');
 
     console.log('\n🧠 local-brain init\n');
     console.log('Detecting AI editors…\n');
@@ -124,7 +137,9 @@ program
       }
 
       const key = editor.key as keyof typeof config;
-      if (!config[key]) config[key] = {};
+      if (!config[key] || typeof config[key] !== 'object') {
+        config[key] = {};
+      }
       (config[key] as Record<string, unknown>)['local-brain'] = entry;
 
       mkdirSync(dir, { recursive: true });
@@ -134,18 +149,18 @@ program
     }
 
     if (detected === 0) {
-      console.log('\n⚠️  No AI editors detected.');
-      console.log('   You can manually add local-brain to your editor\'s MCP config:');
+      console.log('\nℹ️  No AI editor config files found in standard locations.');
+      console.log('   Add local-brain to your editor\'s MCP config:');
       console.log(JSON.stringify({ 'local-brain': entry }, null, 2));
     }
 
     if (opts.hook !== false) {
-      const repoPath = opts.repo as string;
-      const gitDir   = path.join(repoPath, '.git');
+      const repoPath = path.resolve(opts.repo);
+      const gitDir = path.join(repoPath, '.git');
       if (existsSync(gitDir)) {
         writePostCommitHook(repoPath);
       } else {
-        console.log('\n⚠️  No .git directory found — skipping post-commit hook.');
+        console.log('\nℹ️  No .git directory found — skipping post-commit hook.');
       }
     }
 
@@ -161,10 +176,10 @@ program
   .option('--commits <n>',     'Max commits to scan',             '500')
   .option('--verbose',         'Show per-commit log')
   .option('--quiet',           'Suppress all output')
-  .action(async (opts) => {
-    const repoPath   = path.resolve(opts.repo as string);
-    const maxCommits = parseInt(opts.commits as string, 10);
-    const since      = opts.since as string;
+  .action(async (opts: { repo: string; since: string; commits: string; verbose?: boolean; quiet?: boolean }) => {
+    const repoPath   = path.resolve(opts.repo);
+    const maxCommits = parseInt(opts.commits, 10) || 500;
+    const since      = opts.since;
     const verbose    = !!opts.verbose && !opts.quiet;
 
     if (!opts.quiet) {
@@ -197,19 +212,69 @@ program
   .description('Test semantic memory recall directly from CLI')
   .option('--repo <path>', 'Repo root', process.cwd())
   .option('--file <path>', 'File path filter')
-  .action(async (text, opts) => {
-    const repoPath = path.resolve(opts.repo as string);
+  .action(async (text: string, opts: { repo: string; file?: string }) => {
+    const repoPath = path.resolve(opts.repo);
     const db       = getDb(resolveDbPath(repoPath));
 
     const start = performance.now();
     const result = await recallMemories(db, {
       query: text,
-      file_path: opts.file,
+      file_path: opts.file ? sanitizeFilePath(opts.file) ?? undefined : undefined,
     });
     const elapsed = (performance.now() - start).toFixed(2);
 
     console.log(`\n${formatRecallMarkdown(result, text)}`);
     console.log(`\n⚡ Recall latency: ${elapsed} ms | Tokens: ${result.total_tokens}/250\n`);
+  });
+
+// ── learn ─────────────────────────────────────────────────────────────────────
+program
+  .command('learn <lesson>')
+  .description('Store a new lesson, architecture decision, or convention')
+  .option('--repo <path>', 'Repo root', process.cwd())
+  .option('--category <category>', 'Category (fix, architecture, convention, bug, manual)', 'manual')
+  .option('--file <path>', 'Associated file path')
+  .action(async (lesson: string, opts: { repo: string; category: string; file?: string }) => {
+    const repoPath = path.resolve(opts.repo);
+    const db = getDb(resolveDbPath(repoPath));
+    const git = simpleGit(repoPath);
+
+    let headHash: string | null = null;
+    let headRef: string | null = null;
+    try {
+      headHash = (await git.revparse(['HEAD'])).trim();
+      headRef  = (await git.revparse(['--abbrev-ref', 'HEAD'])).trim();
+    } catch {
+      // Non-git
+    }
+
+    const sanitizedPath = sanitizeFilePath(opts.file);
+    const packageScope = derivePackageScope(sanitizedPath);
+    const embedding = embed(lesson);
+
+    const rowid = insertMemory(
+      db,
+      {
+        category:      (opts.category as MemoryCategory) || 'manual',
+        content:       lesson,
+        summary:       lesson.slice(0, 400),
+        file_path:     sanitizedPath,
+        package_scope: packageScope,
+        commit_hash:   headHash,
+        git_ref:       headRef,
+        status:        'active',
+        source:        'manual',
+        token_count:   estimateTokens(lesson),
+        importance:    1.0,
+        confidence:    1.0,
+      },
+      embedding
+    );
+    insertEmbedding(db, rowid, embedding);
+
+    console.log(`\n✅ Memory stored (id: ${rowid})`);
+    console.log(`   Category: ${opts.category}`);
+    console.log(`   File:     ${sanitizedPath ?? 'general'}\n`);
   });
 
 // ── doctor ────────────────────────────────────────────────────────────────────
@@ -249,31 +314,22 @@ program
   .command('status')
   .description('Show brain DB statistics')
   .option('--repo <path>', 'Repo root', process.cwd())
-  .action((opts) => {
-    const repoPath = path.resolve(opts.repo as string);
-    const db       = getDb(resolveDbPath(repoPath));
-
-    const stats = db.prepare(`
-      SELECT
-        COUNT(*) AS total,
-        SUM(CASE WHEN status = 'active'     THEN 1 ELSE 0 END) AS active,
-        SUM(CASE WHEN status = 'stale'      THEN 1 ELSE 0 END) AS stale,
-        SUM(CASE WHEN status = 'deprecated' THEN 1 ELSE 0 END) AS deprecated,
-        SUM(CASE WHEN source  = 'git-ingest' THEN 1 ELSE 0 END) AS from_git,
-        SUM(CASE WHEN source  = 'manual'     THEN 1 ELSE 0 END) AS manual
-      FROM memories
-    `).get() as Record<string, number>;
-
-    const ingested = db.prepare('SELECT COUNT(*) AS c FROM ingested_commits').get() as { c: number };
+  .action((opts: { repo: string }) => {
+    const repoPath = path.resolve(opts.repo);
+    const dbPath   = resolveDbPath(repoPath);
+    const db       = getDb(dbPath);
+    const stats    = getDatabaseStats(db, dbPath);
 
     console.log('\n🧠 local-brain status\n');
+    console.log(`   Database:         ${stats.dbPath}`);
+    console.log(`   Size:             ${(stats.sizeBytes / 1024).toFixed(1)} KB`);
     console.log(`   Total memories:   ${stats.total}`);
     console.log(`   Active:           ${stats.active}`);
     console.log(`   Stale:            ${stats.stale}`);
     console.log(`   Deprecated:       ${stats.deprecated}`);
-    console.log(`   From git:         ${stats.from_git}`);
+    console.log(`   From git:         ${stats.fromGit}`);
     console.log(`   Manual:           ${stats.manual}`);
-    console.log(`   Commits ingested: ${ingested.c}\n`);
+    console.log(`   Commits ingested: ${stats.commitsIngested}\n`);
   });
 
 // ── prune ─────────────────────────────────────────────────────────────────────
@@ -281,22 +337,46 @@ program
   .command('prune')
   .description('Remove stale or deprecated memories')
   .option('--repo <path>',      'Repo root',             process.cwd())
-  .option('--status <status>',  'Which to remove',        'stale')
+  .option('--status <status>',  'Which to remove (stale, deprecated, all)', 'stale')
   .option('--invalidate',       'Run git invalidation pass first')
-  .action(async (opts) => {
-    const repoPath = path.resolve(opts.repo as string);
+  .action(async (opts: { repo: string; status: string; invalidate?: boolean }) => {
+    const repoPath = path.resolve(opts.repo);
     const db       = getDb(resolveDbPath(repoPath));
 
     if (opts.invalidate) {
       const git = simpleGit(repoPath);
       const inv = await runInvalidationPass(db, git);
       console.log(`\n🔍 Invalidation pass:`);
-      console.log(`   Files checked:    ${inv.checkedFiles}`);
+      console.log(`   Files checked:      ${inv.checkedFiles}`);
       console.log(`   Memories stalified: ${inv.stalifiedCount}`);
+      console.log(`   Snapshots updated:  ${inv.updatedSnapshots}`);
     }
 
     const removed = pruneByStatus(db, opts.status as 'stale' | 'deprecated' | 'all');
     console.log(`\n🧹 Pruned ${removed} ${opts.status} memories.\n`);
+  });
+
+// ── forget ────────────────────────────────────────────────────────────────────
+program
+  .command('forget <id>')
+  .description('Delete a specific memory by ID')
+  .option('--repo <path>', 'Repo root', process.cwd())
+  .action((id: string, opts: { repo: string }) => {
+    const numId = parseInt(id, 10);
+    if (isNaN(numId) || numId <= 0) {
+      console.error('\n❌ Please provide a valid positive integer memory ID.\n');
+      process.exit(1);
+    }
+
+    const repoPath = path.resolve(opts.repo);
+    const db       = getDb(resolveDbPath(repoPath));
+    const deleted  = deleteMemory(db, numId);
+
+    if (deleted) {
+      console.log(`\n🗑️ Memory #${numId} deleted successfully.\n`);
+    } else {
+      console.log(`\n⚠️ Memory #${numId} was not found in the database.\n`);
+    }
   });
 
 program.parse();

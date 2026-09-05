@@ -1,20 +1,25 @@
 /**
- * scoping.ts — Monorepo directory-scoped query filtering.
+ * scoping.ts — Monorepo directory-scoped query filtering & path sanitization.
  *
  * When a developer works in `packages/auth/`, we only surface memories
  * from that sub-package — preventing noise from unrelated modules.
  */
 /**
+ * Sanitize a file path to prevent directory traversal and null byte injections.
+ * Returns normalized repo-relative path (e.g. 'src/auth/jwt.ts') or null if invalid.
+ */
+export declare function sanitizeFilePath(filePath: string | null | undefined): string | null;
+/**
  * Derive the monorepo package scope from a file path.
  *
  * Examples:
- *   packages/auth/src/jwt.ts     → 'packages/auth'
+ *   packages/auth/src/jwt.ts       → 'packages/auth'
  *   apps/dashboard/pages/index.tsx → 'apps/dashboard'
- *   src/utils/helpers.ts         → null  (no monorepo scope)
+ *   src/utils/helpers.ts           → null  (no monorepo scope)
  */
 export declare function derivePackageScope(filePath: string | null | undefined): string | null;
 /**
- * Build a SQLite LIKE pattern for scoped queries.
+ * Build a parameterized SQLite filter for package scoped queries.
  *
  * Examples:
  *   scope: 'packages/auth'    → LIKE 'packages/auth/%' OR 'packages/auth'
@@ -30,7 +35,7 @@ export declare function buildScopeFilter(scope: string | null): {
  */
 export declare function detectWorkingScope(cwd?: string): string | null;
 /**
- * Normalise a raw file path to a repo-relative path, given the repo root.
+ * Normalize a raw file path to a repo-relative path, given the repo root.
  *
  * e.g.
  *   repoRoot: /home/user/projects/myapp
