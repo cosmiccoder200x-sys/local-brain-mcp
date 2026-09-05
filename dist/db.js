@@ -12,6 +12,9 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // ─── DB Path Resolution ────────────────────────────────────────────────────────
 export function resolveDbPath(repoRoot) {
+    if (process.env.LOCAL_BRAIN_DB_PATH) {
+        return path.resolve(process.env.LOCAL_BRAIN_DB_PATH);
+    }
     if (repoRoot) {
         return path.join(repoRoot, '.git', 'brain.db');
     }
