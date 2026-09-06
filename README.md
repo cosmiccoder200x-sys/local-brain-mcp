@@ -2,11 +2,22 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node Version](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen.svg)](https://nodejs.org/)
 
-# 🧠 local-brain-mcp (v1.2.0)
+<p align="center">
+  <img src="assets/logo/local-brain.svg" width="96" height="96" alt="Local Brain MCP Logo" />
+</p>
 
-> **Shared, local-first memory layer for multi-agent software development.**
+# Local Brain MCP
+
+> **Shared, local-first memory for AI coding agents.**
 
 Local Brain is a high-performance [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that indexes your repository's Git history and AI engineering decisions into an embedded SQLite vector database.
+
+```
+Claude Code ─┐
+Cursor      ─┼── Local Brain ── Shared Project Memory
+Antigravity ─┤
+Copilot     ─┘
+```
 
 When multiple coding assistants (**Claude Code, Cursor, Antigravity, GitHub Copilot, Windsurf, Zed**) collaborate on the same repository, they share, validate, and evolve the same durable engineering memory—**100% offline, zero cloud egress, and zero external database dependencies.**
 
@@ -45,6 +56,36 @@ npx local-brain ingest
 npx local-brain status
 
 # 5. Start collaborating with Claude Code, Cursor, Antigravity, Copilot, or Windsurf!
+```
+
+### CLI Experience
+
+```
+╭────────────────────────────────────────────────────╮
+│                                                    │
+│      ╭──────╮                                      │
+│    ╭─╯ ╷  ╷ ╰─╮                                    │
+│    │ ●─┼──┼─ >_                                    │
+│    ╰─╮ ╵  ╵ ╭─╯                                    │
+│      ╰──────╯                                      │
+│                                                    │
+│      Local Brain MCP                               │
+│      Shared Memory for AI Coding Agents            │
+│                                                    │
+╰────────────────────────────────────────────────────╯
+
+✓ Local Brain initialized successfully
+
+PROJECT       retail-gem-quest
+MEMORY STORE  .local-brain/memory.db
+STATUS        ● ACTIVE
+VERSION       1.2.0
+
+MEMORIES      0
+LESSONS       0
+AGENTS        0
+
+Ready for AI memory.
 ```
 
 ---

@@ -16,7 +16,7 @@
  *  local-brain prune    — remove stale/deprecated memories
  */
 import { program } from 'commander';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -29,6 +29,30 @@ import { recallMemories, formatRecallMarkdown, traceFile } from './recall.js';
 import { derivePackageScope } from './scoping.js';
 import { evaluateMemoryQuality, detectImportanceLevel } from './quality.js';
 import { detectAgent, normalizeAgentId, getProjectId } from './provenance.js';
+import { headerBanner, compactMark, success, warning, error, muted, highlight, heading, label, keyVal, statusDot, badge, setColorEnabled, isColorSupported, } from './theme.js';
+const VERSION = '1.2.0';
+// ─── Time Ago Utility ─────────────────────────────────────────────────────────
+function timeAgo(dateStr) {
+    try {
+        const d = new Date(dateStr);
+        const diffMs = Date.now() - d.getTime();
+        if (isNaN(diffMs) || diffMs < 0)
+            return dateStr;
+        const mins = Math.floor(diffMs / 60000);
+        if (mins < 1)
+            return 'just now';
+        if (mins < 60)
+            return `${mins}m ago`;
+        const hours = Math.floor(mins / 60);
+        if (hours < 24)
+            return `${hours}h ago`;
+        const days = Math.floor(hours / 24);
+        return `${days}d ago`;
+    }
+    catch {
+        return dateStr;
+    }
+}
 // ─── Editor Config Paths ──────────────────────────────────────────────────────
 const HOME = os.homedir();
 const EDITOR_TARGETS = [
@@ -74,13 +98,20 @@ function writePostCommitHook(repoPath) {
 `;
     mkdirSync(hooksDir, { recursive: true });
     writeFileSync(hookPath, script, { mode: 0o755 });
-    console.log(`  ✅ post-commit hook installed at ${hookPath}`);
+    console.log(`  ${success('✓')} post-commit hook installed at ${muted(hookPath)}`);
 }
 // ─── CLI Program ──────────────────────────────────────────────────────────────
 program
     .name('local-brain')
     .description('Local-first, multi-agent shared memory layer for AI coding agents')
-    .version('1.2.0');
+    .version(VERSION, '-v, --version', 'Output the current version')
+    .option('--no-color', 'Disable color output')
+    .hook('preAction', (thisCommand) => {
+    const opts = thisCommand.opts();
+    if (opts.color === false || process.argv.includes('--no-color')) {
+        setColorEnabled(false);
+    }
+});
 // ── init ──────────────────────────────────────────────────────────────────────
 program
     .command('init')
@@ -90,14 +121,28 @@ program
     .action(async (opts) => {
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
     const serverEntrypoint = path.resolve(__dirname, 'mcp-server.js');
-    console.log('\n🧠 local-brain init\n');
-    console.log('Detecting AI editors…\n');
+    const repoPath = path.resolve(opts.repo);
+    const dbPath = resolveDbPath(repoPath);
+    const db = getDb(dbPath);
+    const stats = getDbStats(db);
+    const projectId = getProjectId(repoPath);
+    console.log('\n' + headerBanner() + '\n');
+    console.log(`  ${success('✓')} ${highlight('Local Brain initialized successfully')}\n`);
+    const relDbPath = path.relative(repoPath, dbPath) || dbPath;
+    console.log(`  ${keyVal('PROJECT', projectId)}`);
+    console.log(`  ${keyVal('MEMORY STORE', relDbPath)}`);
+    console.log(`  ${label('STATUS')} ${statusDot('active')}`);
+    console.log(`  ${keyVal('VERSION', VERSION)}\n`);
+    console.log(`  ${keyVal('MEMORIES', stats.total)}`);
+    console.log(`  ${keyVal('LESSONS', stats.manual)}`);
+    console.log(`  ${keyVal('AGENTS', Object.keys(stats.agent_breakdown).length)}\n`);
+    console.log(`  ${heading('AI Editors & Configs:')}`);
     let detected = 0;
     const entry = buildMcpEntry(serverEntrypoint);
     for (const editor of EDITOR_TARGETS) {
         const dir = path.dirname(editor.configPath);
         if (!existsSync(dir) && !existsSync(editor.configPath)) {
-            console.log(`  ⏭  ${editor.name} — not found`);
+            console.log(`  ${muted('⏭')}  ${muted(editor.name)} — not found`);
             continue;
         }
         let config = {};
@@ -116,25 +161,24 @@ program
         config[key]['local-brain'] = entry;
         mkdirSync(dir, { recursive: true });
         writeFileSync(editor.configPath, JSON.stringify(config, null, 2));
-        console.log(`  ✅ ${editor.name} — config updated at ${editor.configPath}`);
+        console.log(`  ${success('✓')} ${highlight(editor.name)} — config updated at ${muted(editor.configPath)}`);
         detected++;
     }
     if (detected === 0) {
-        console.log('\nℹ️  No AI editor config files found in standard locations.');
-        console.log('   Add local-brain to your editor\'s MCP config:');
+        console.log(`\n  ${muted('ℹ No standard AI editor config paths found.')}`);
+        console.log(`    Add local-brain to your editor's MCP config:`);
         console.log(JSON.stringify({ 'local-brain': entry }, null, 2));
     }
     if (opts.hook !== false) {
-        const repoPath = path.resolve(opts.repo);
         const gitDir = path.join(repoPath, '.git');
         if (existsSync(gitDir)) {
             writePostCommitHook(repoPath);
         }
         else {
-            console.log('\nℹ️  No .git directory found — skipping post-commit hook.');
+            console.log(`  ${muted('ℹ No .git directory found — skipped post-commit hook.')}`);
         }
     }
-    console.log(`\n✨ Done! Restart your AI editor to activate local-brain.\n`);
+    console.log(`\n  ${highlight('Ready for AI memory.')}\n`);
 });
 // ── ingest ────────────────────────────────────────────────────────────────────
 program
@@ -151,10 +195,10 @@ program
     const since = opts.since;
     const verbose = !opts.quiet && Boolean(opts.verbose);
     if (!opts.quiet) {
-        console.log(`\n🧠 local-brain ingest`);
-        console.log(`   Repo:   ${repoPath}`);
-        console.log(`   Since:  ${since}`);
-        console.log(`   Max:    ${maxCommits} commits\n`);
+        console.log(`\n${compactMark()} ${highlight('Local Brain MCP — Git Ingestion')}`);
+        console.log(`   ${keyVal('Repo', repoPath, 8)}`);
+        console.log(`   ${keyVal('Since', since, 8)}`);
+        console.log(`   ${keyVal('Max', `${maxCommits} commits`, 8)}\n`);
     }
     const db = getDb(resolveDbPath(repoPath));
     const result = await ingestGitHistory(db, {
@@ -164,12 +208,12 @@ program
         verbose,
     });
     if (!opts.quiet) {
-        console.log(`\n✅ Ingest complete:`);
-        console.log(`   Scanned:  ${result.scanned}`);
-        console.log(`   Ingested: ${result.ingested}`);
-        console.log(`   Merged:   ${result.merged}`);
-        console.log(`   Skipped:  ${result.skipped}`);
-        console.log(`   Errors:   ${result.errors}\n`);
+        console.log(`  ${success('✓')} ${highlight('Ingest complete')}:`);
+        console.log(`     ${label('Scanned', 12)} ${highlight(result.scanned)}`);
+        console.log(`     ${label('Ingested', 12)} ${highlight(result.ingested)}`);
+        console.log(`     ${label('Merged', 12)} ${highlight(result.merged)}`);
+        console.log(`     ${label('Skipped', 12)} ${muted(result.skipped)}`);
+        console.log(`     ${label('Errors', 12)} ${result.errors > 0 ? error(result.errors) : muted(result.errors)}\n`);
     }
 });
 // ── query ─────────────────────────────────────────────────────────────────────
@@ -191,8 +235,9 @@ program
         agent_filter: opts.agent,
     });
     const elapsed = (performance.now() - start).toFixed(2);
-    console.log(`\n${formatRecallMarkdown(result, text)}`);
-    console.log(`\n⚡ Recall latency: ${elapsed} ms | Tokens: ${result.total_tokens}/250\n`);
+    console.log(`\n${compactMark()} ${highlight('Local Brain Recall')}\n`);
+    console.log(formatRecallMarkdown(result, text));
+    console.log(`\n  ${muted('⚡')} ${label('Latency', 8)} ${highlight(`${elapsed} ms`)} | ${label('Tokens', 7)} ${highlight(`${result.total_tokens}/250`)}\n`);
 });
 // ── learn ─────────────────────────────────────────────────────────────────────
 program
@@ -214,7 +259,7 @@ program
     const importance_level = opts.importanceLevel || detectImportanceLevel(lesson);
     const quality = evaluateMemoryQuality(lesson, category);
     if (!quality.isQuality) {
-        console.error(`\n⚠️  Memory rejected: ${quality.reason}`);
+        console.error(`\n  ${warning('▲')} ${error('Memory rejected')}: ${muted(quality.reason ?? 'Quality threshold not met')}\n`);
         process.exit(1);
     }
     const embedding = embed(lesson);
@@ -237,7 +282,7 @@ program
         token_count: estimateTokens(lesson),
     }, embedding);
     insertEmbedding(db, id, embedding);
-    console.log(`\n✅ Stored memory id #${id} [agent: ${agent}, importance: ${importance_level}, quality: ${quality.score}]\n`);
+    console.log(`\n  ${success('✓')} ${highlight(`Stored memory #${id}`)} ${muted(`[agent: ${agent}, importance: ${importance_level}, quality: ${quality.score}]`)}\n`);
 });
 // ── validate ──────────────────────────────────────────────────────────────────
 program
@@ -248,18 +293,18 @@ program
     .action((idStr, opts) => {
     const numId = parseInt(idStr, 10);
     if (isNaN(numId) || numId <= 0) {
-        console.error('\n❌ Please provide a valid positive integer memory ID.\n');
+        console.error(`\n  ${error('✖')} ${error('Please provide a valid positive integer memory ID.')}\n`);
         process.exit(1);
     }
     const repoPath = path.resolve(opts.repo);
     const db = getDb(resolveDbPath(repoPath));
     const agent = normalizeAgentId(opts.agent);
-    const success = validateMemory(db, numId, agent);
-    if (success) {
-        console.log(`\n✨ Memory #${numId} validated by '${agent}'. Confidence boosted.\n`);
+    const ok = validateMemory(db, numId, agent);
+    if (ok) {
+        console.log(`\n  ${success('✓')} ${highlight(`Memory #${numId}`)} validated by '${agent}'. Confidence boosted.\n`);
     }
     else {
-        console.error(`\n❌ Memory #${numId} not found.\n`);
+        console.error(`\n  ${error('✖')} Memory #${numId} not found.\n`);
         process.exit(1);
     }
 });
@@ -289,12 +334,18 @@ program
     params.push(limit);
     const sql = `SELECT * FROM memories WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC LIMIT ?`;
     const rows = db.prepare(sql).all(...params);
-    console.log(`\n📋 Stored Memories (${rows.length} records):\n`);
+    console.log(`\n${compactMark()} ${highlight(`Stored Memories (${rows.length} records)`)}:\n`);
+    if (rows.length === 0) {
+        console.log(`  ${muted('No memories found matching the specified filters.')}\n`);
+        return;
+    }
     for (const r of rows) {
         const file = r.file_path ?? 'general';
-        const val = (r.validation_count ?? 0) > 0 ? ` [val: ${r.validation_count}×]` : '';
-        const cFlag = r.contradiction_flag === 1 ? ' [⚠️ CONTRADICTION]' : '';
-        console.log(`• #${r.id} [${r.agent ?? 'unknown'}] (${r.category}${val}${cFlag} | ${file}): ${r.summary.slice(0, 120)}`);
+        const val = (r.validation_count ?? 0) > 0 ? ` ${success(`[val: ${r.validation_count}×]`)}` : '';
+        const cFlag = r.contradiction_flag === 1 ? ` ${warning('[⚠️ CONTRADICTION]')}` : '';
+        const agTag = muted(`[${r.agent ?? 'unknown'}]`);
+        const catTag = muted(`(${r.category} | ${file})`);
+        console.log(`  • ${highlight(`#${r.id}`)} ${agTag} ${catTag}${val}${cFlag}: ${r.summary.slice(0, 120)}`);
     }
     console.log('');
 });
@@ -308,17 +359,17 @@ program
     const db = getDb(resolveDbPath(repoPath));
     const memories = traceFile(db, filePath);
     if (memories.length === 0) {
-        console.log(`\nNo memories recorded for ${filePath}\n`);
+        console.log(`\n  ${muted(`No memories recorded for ${filePath}`)}\n`);
         return;
     }
-    console.log(`\n## Memory Trace: ${filePath}\n`);
+    console.log(`\n${compactMark()} ${heading(`Memory Trace: ${filePath}`)}\n`);
     for (const m of memories) {
-        const statusTag = m.status !== 'active' ? ` [${m.status.toUpperCase()}]` : '';
-        const supersededTag = m.superseded_by ? ` [SUPERSEDED by #${m.superseded_by}]` : '';
-        const agentTag = m.agent && m.agent !== 'unknown' ? ` [agent: ${m.agent}]` : '';
-        const valTag = (m.validation_count ?? 0) > 0 ? ` [validated: ${m.validation_count}×]` : '';
-        const commitTag = m.commit_hash ? ` @ ${m.commit_hash.slice(0, 7)}` : '';
-        console.log(`• #${m.id} [${m.category}${statusTag}${supersededTag}${agentTag}${valTag}${commitTag}]: ${m.summary.slice(0, 180)}`);
+        const statusTag = m.status !== 'active' ? ` ${badge(m.status.toUpperCase(), 'warning')}` : '';
+        const supersededTag = m.superseded_by ? ` ${badge(`SUPERSEDED by #${m.superseded_by}`, 'muted')}` : '';
+        const agentTag = m.agent && m.agent !== 'unknown' ? ` ${muted(`[agent: ${m.agent}]`)}` : '';
+        const valTag = (m.validation_count ?? 0) > 0 ? ` ${success(`[validated: ${m.validation_count}×]`)}` : '';
+        const commitTag = m.commit_hash ? ` ${muted(`@ ${m.commit_hash.slice(0, 7)}`)}` : '';
+        console.log(`  • ${highlight(`#${m.id}`)} ${muted(`[${m.category}]`)}${statusTag}${supersededTag}${agentTag}${valTag}${commitTag}: ${m.summary.slice(0, 180)}`);
     }
     console.log('');
 });
@@ -341,22 +392,23 @@ program
         query: opts.query,
         hardDelete: Boolean(opts.hard),
     });
-    console.log(`\n🗑️  ${opts.hard ? 'Deleted' : 'Deprecated'} ${res.count} memory record(s).\n`);
+    const verb = opts.hard ? 'Deleted' : 'Deprecated';
+    console.log(`\n  ${success('✓')} ${highlight(`${verb} ${res.count} memory record(s).`)}\n`);
 });
 // ── doctor ────────────────────────────────────────────────────────────────────
 program
     .command('doctor')
     .description('Run system diagnostics and verify MCP editor configurations')
     .action(() => {
-    console.log('\n🩺 local-brain doctor\n');
-    console.log(`  Node.js version:   ${process.version} (>=18.0.0 required)`);
-    console.log(`  Platform:          ${process.platform} (${process.arch})`);
-    console.log(`  Detected Agent:    ${detectAgent()}`);
-    console.log(`  Project ID:        ${getProjectId()}`);
+    console.log(`\n${compactMark()} ${highlight('Local Brain Doctor')}\n`);
+    console.log(`  ${label('Node.js', 18)} ${process.version} (>=20.0.0 required)`);
+    console.log(`  ${label('Platform', 18)} ${process.platform} (${process.arch})`);
+    console.log(`  ${label('Detected Agent', 18)} ${detectAgent()}`);
+    console.log(`  ${label('Project ID', 18)} ${getProjectId()}`);
     const dbPath = resolveDbPath();
-    console.log(`  Default DB path:   ${dbPath}`);
-    console.log(`  DB file exists:    ${existsSync(dbPath) ? '✅ YES' : 'ℹ️ NO (will be created on first ingest)'}`);
-    console.log('\n  Editor Configurations:');
+    console.log(`  ${label('Default DB path', 18)} ${muted(dbPath)}`);
+    console.log(`  ${label('DB file exists', 18)} ${existsSync(dbPath) ? success('✓ YES') : muted('ℹ NO (will be created on first ingest)')}`);
+    console.log(`\n  ${heading('Editor Configurations:')}`);
     for (const editor of EDITOR_TARGETS) {
         if (existsSync(editor.configPath)) {
             try {
@@ -364,17 +416,17 @@ program
                 const key = editor.key;
                 const servers = config[key];
                 const configured = Boolean(servers && servers['local-brain']);
-                console.log(`    • ${editor.name.padEnd(16)}: ${configured ? '✅ CONFIGURED' : '⚠️ FILE EXISTS, MCP NOT LINKED'}`);
+                console.log(`    • ${editor.name.padEnd(18)}: ${configured ? success('✓ CONFIGURED') : warning('▲ FILE EXISTS, MCP NOT LINKED')}`);
             }
             catch {
-                console.log(`    • ${editor.name.padEnd(16)}: ⚠️ INVALID JSON`);
+                console.log(`    • ${editor.name.padEnd(18)}: ${error('✖ INVALID JSON')}`);
             }
         }
         else {
-            console.log(`    • ${editor.name.padEnd(16)}: ⏭ NOT INSTALLED`);
+            console.log(`    • ${editor.name.padEnd(18)}: ${muted('⏭ NOT INSTALLED')}`);
         }
     }
-    console.log('\n  All checks complete.\n');
+    console.log(`\n  ${success('✓')} All diagnostics complete.\n`);
 });
 // ── status ────────────────────────────────────────────────────────────────────
 program
@@ -383,34 +435,69 @@ program
     .option('--repo <path>', 'Repo root', process.cwd())
     .action(async (opts) => {
     const repoPath = path.resolve(opts.repo);
-    const db = getDb(resolveDbPath(repoPath));
+    const dbPath = resolveDbPath(repoPath);
+    const db = getDb(dbPath);
     const stats = getDbStats(db);
-    const dbFilePath = resolveDbPath(repoPath);
-    let sizeKb = '?';
+    const projectId = getProjectId(repoPath);
+    let sizeKb = '0.0';
     try {
-        const { statSync } = await import('fs');
-        sizeKb = (statSync(dbFilePath).size / 1024).toFixed(1);
+        sizeKb = (statSync(dbPath).size / 1024).toFixed(1);
     }
-    catch { /* file may not exist yet */ }
-    console.log('\n🧠 local-brain status (v1.2.0)\n');
-    console.log(`   Database:         ${dbFilePath}`);
-    console.log(`   Project ID:       ${getProjectId(repoPath)}`);
-    console.log(`   Size:             ${sizeKb} KB`);
-    console.log(`   Total memories:   ${stats.total}`);
-    console.log(`   Active:           ${stats.active}`);
-    console.log(`   Stale:            ${stats.stale}`);
-    console.log(`   Deprecated:       ${stats.deprecated}`);
-    console.log(`   Superseded:       ${stats.superseded}`);
-    console.log(`   Validated:        ${stats.validated}`);
-    console.log(`   Contradictions:   ${stats.contradicted}`);
-    console.log(`   From git:         ${stats.from_git}`);
-    console.log(`   Manual:           ${stats.manual}`);
-    console.log(`   Commits ingested: ${stats.commits_ingested}`);
-    console.log(`   File snapshots:   ${stats.file_snapshots}`);
-    const agentList = Object.entries(stats.agent_breakdown)
-        .map(([ag, count]) => `     • ${ag}: ${count}`)
-        .join('\n');
-    console.log(`\n   Agent Breakdown:\n${agentList || '     • none'}\n`);
+    catch { /* DB file may not exist yet */ }
+    console.log(`\n${compactMark()} ${highlight('Local Brain MCP')}\n`);
+    console.log(`${heading('PROJECT')}`);
+    console.log(`  ${highlight(projectId)}\n`);
+    console.log(`${heading('MEMORY')}`);
+    console.log(`  ${label('Store', 12)} ${muted(dbPath)}`);
+    console.log(`  ${label('Size', 12)} ${sizeKb} KB`);
+    console.log(`  ${label('Memories', 12)} ${highlight(stats.total.toLocaleString())}`);
+    console.log(`  ${label('Lessons', 12)} ${highlight(stats.manual.toLocaleString())}`);
+    console.log(`  ${label('From Git', 12)} ${highlight(stats.from_git.toLocaleString())}`);
+    console.log(`  ${label('Validated', 12)} ${highlight(stats.validated.toLocaleString())}`);
+    console.log(`  ${label('Active', 12)} ${statusDot('active')} (${stats.active})`);
+    if (stats.stale > 0) {
+        console.log(`  ${label('Stale', 12)} ${statusDot('stale')} (${stats.stale})`);
+    }
+    if (stats.deprecated > 0) {
+        console.log(`  ${label('Deprecated', 12)} ${statusDot('deprecated')} (${stats.deprecated})`);
+    }
+    if (stats.superseded > 0) {
+        console.log(`  ${label('Superseded', 12)} ${muted(`${stats.superseded}`)}`);
+    }
+    if (stats.contradicted > 0) {
+        console.log(`  ${label('Contradicted', 12)} ${warning(`${stats.contradicted}`)}`);
+    }
+    console.log('');
+    console.log(`${heading('AGENTS')}`);
+    const agentEntries = Object.entries(stats.agent_breakdown);
+    if (agentEntries.length === 0) {
+        console.log(`  ${muted('No agent activity recorded yet')}`);
+    }
+    else {
+        for (const [ag, count] of agentEntries) {
+            const displayAg = ag === 'unknown' ? 'Unknown' : ag;
+            console.log(`  ${displayAg.padEnd(20)} ${statusDot('active')} (${count})`);
+        }
+    }
+    console.log('');
+    // Recent knowledge from database (never fabricated)
+    try {
+        const recentRows = db
+            .prepare(`SELECT summary, agent, created_at FROM memories WHERE status = 'active' ORDER BY created_at DESC LIMIT 3`)
+            .all();
+        if (recentRows.length > 0) {
+            console.log(`${heading('RECENT KNOWLEDGE')}`);
+            for (const item of recentRows) {
+                console.log(`  ${highlight(item.summary.slice(0, 100))}`);
+                const ag = item.agent && item.agent !== 'unknown' ? item.agent : 'Local Brain';
+                const time = timeAgo(item.created_at);
+                console.log(`    ${muted(`Learned by ${ag} · ${time}`)}\n`);
+            }
+        }
+    }
+    catch {
+        // Table or DB may be empty/uninitialized
+    }
 });
 // ── prune ─────────────────────────────────────────────────────────────────────
 program
@@ -425,13 +512,62 @@ program
     if (opts.invalidate) {
         const git = simpleGit(repoPath);
         const inv = await runInvalidationPass(db, git);
-        console.log(`\n🔍 Invalidation pass:`);
-        console.log(`   Files checked:      ${inv.checkedFiles}`);
-        console.log(`   Memories stalified: ${inv.stalifiedCount}`);
-        console.log(`   Snapshots updated:  ${inv.updatedSnapshots}`);
+        console.log(`\n${compactMark()} ${highlight('Git Invalidation Pass')}:`);
+        console.log(`     ${label('Files checked', 20)} ${highlight(inv.checkedFiles)}`);
+        console.log(`     ${label('Memories stalified', 20)} ${inv.stalifiedCount > 0 ? warning(inv.stalifiedCount) : muted(inv.stalifiedCount)}`);
+        console.log(`     ${label('Snapshots updated', 20)} ${highlight(inv.updatedSnapshots)}`);
     }
     const removed = pruneByStatus(db, opts.status);
-    console.log(`\n🧹 Pruned ${removed} ${opts.status} memories.\n`);
+    console.log(`\n  ${success('✓')} ${highlight(`Pruned ${removed} ${opts.status} memories.`)}\n`);
+});
+// Custom help formatting
+program.configureHelp({
+    formatHelp: (cmd, helper) => {
+        const title = isColorSupported() ? highlight('Local Brain MCP') : 'Local Brain MCP';
+        const desc = isColorSupported() ? muted('Shared memory for AI coding agents') : 'Shared memory for AI coding agents';
+        const useHeading = isColorSupported() ? heading('Usage:') : 'Usage:';
+        const cmdHeading = isColorSupported() ? heading('Commands:') : 'Commands:';
+        const optHeading = isColorSupported() ? heading('Options:') : 'Options:';
+        const commands = [
+            ['init [options]', 'Auto-detect AI editors and write MCP config'],
+            ['ingest [options]', 'Scan git history and build the local brain DB'],
+            ['query <text>', 'Test semantic recall directly from CLI'],
+            ['learn <lesson>', 'Store a durable engineering lesson'],
+            ['validate <id>', 'Validate that a memory was helpful and correct'],
+            ['memories [options]', 'List stored memories with filtering'],
+            ['trace <filePath>', 'Show full chronological memory history for a file'],
+            ['forget [options]', 'Remove or deprecate specific memories'],
+            ['status [options]', 'Show memory status and agent breakdown'],
+            ['prune [options]', 'Remove stale or deprecated memories'],
+            ['doctor', 'Run system diagnostics and verify MCP editor configurations'],
+        ];
+        const options = [
+            ['--no-color', 'Disable color output'],
+            ['-v, --version', 'Output the current version'],
+            ['-h, --help', 'Display help for command'],
+        ];
+        const maxCmdLen = Math.max(...commands.map(c => c[0].length));
+        const maxOptLen = Math.max(...options.map(o => o[0].length));
+        const cmdLines = commands
+            .map(([name, d]) => `  ${highlight(name.padEnd(maxCmdLen + 2))} ${muted(d)}`)
+            .join('\n');
+        const optLines = options
+            .map(([name, d]) => `  ${highlight(name.padEnd(maxOptLen + 2))} ${muted(d)}`)
+            .join('\n');
+        return `
+${title}
+${desc}
+
+${useHeading}
+  local-brain <command> [options]
+
+${cmdHeading}
+${cmdLines}
+
+${optHeading}
+${optLines}
+`;
+    }
 });
 program.parse();
 //# sourceMappingURL=cli.js.map
