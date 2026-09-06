@@ -14,14 +14,28 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema, } from '@modelcontextprotocol/sdk/types.js';
-import simpleGit from 'simple-git';
+import { simpleGit } from 'simple-git';
 import { getDb, insertMemory, insertEmbedding, pruneByStatus, forgetMemory, getDbStats, findDuplicateMemory, mergeMemory, resolveDbPath, } from './db.js';
 import { embed, warmupEmbeddings, estimateTokens } from './embeddings.js';
 import { recallMemories, formatRecallMarkdown, traceFile } from './recall.js';
 import { runInvalidationPass } from './invalidation.js';
 import { derivePackageScope } from './scoping.js';
 import { evaluateMemoryQuality, extractReferencedFiles } from './quality.js';
-// ─── Init ─────────────────────────────────────────────────────────────────────
+// ─── Server State ─────────────────────────────────────────────────────────────
+const SERVER_NAME = 'local-brain-mcp';
+const SERVER_VERSION = '1.1.0';
+const VALID_CATEGORIES = new Set([
+    'fix',
+    'architecture',
+    'convention',
+    'bug',
+    'manual',
+]);
+const VALID_PRUNE_STATUSES = new Set([
+    'stale',
+    'deprecated',
+    'all',
+]);
 const db = getDb();
 const git = simpleGit(process.cwd());
 // ─── Tool Definitions with Precise MCP Annotations ───────────────────────────
@@ -203,52 +217,6 @@ export const MCP_TOOLS = [
                     description: 'If true, permanently deletes records from SQLite. Default is false (marks deprecated).',
                     default: false,
                 },
-            },
-            annotations: {
-                readOnlyHint: false,
-                destructiveHint: true,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
-        },
-        {
-            name: 'brain_status',
-            description: [
-                'Get safe operational telemetry and diagnostics for the local brain.',
-                'Returns total/active/stale memory counts, database size, Git HEAD info, and engine capabilities.',
-            ].join(' '),
-            inputSchema: {
-                type: 'object',
-                properties: {},
-            },
-            annotations: {
-                readOnlyHint: true,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
-        },
-        {
-            name: 'brain_forget',
-            description: [
-                'Permanently delete a specific memory entry by its integer ID.',
-                'Use brain_recall or brain_trace to find the ID of the memory you want to forget.',
-            ].join(' '),
-            inputSchema: {
-                type: 'object',
-                properties: {
-                    memory_id: {
-                        type: 'number',
-                        description: 'The positive integer ID of the memory to remove.',
-                    },
-                },
-                required: ['memory_id'],
-            },
-            annotations: {
-                readOnlyHint: false,
-                destructiveHint: true,
-                idempotentHint: true,
-                openWorldHint: false,
             },
         },
     },

@@ -19,7 +19,7 @@ import {
   ListToolsRequestSchema,
   type Tool,
 } from '@modelcontextprotocol/sdk/types.js';
-import simpleGit from 'simple-git';
+import { simpleGit } from 'simple-git';
 
 import {
   getDb,
@@ -241,52 +241,6 @@ export const MCP_TOOLS: Tool[] = [
           description: 'If true, permanently deletes records from SQLite. Default is false (marks deprecated).',
           default:     false,
         },
-      },
-      annotations: {
-        readOnlyHint:    false,
-        destructiveHint: true,
-        idempotentHint:  true,
-        openWorldHint:   false,
-      },
-    },
-    {
-      name:        'brain_status',
-      description: [
-        'Get safe operational telemetry and diagnostics for the local brain.',
-        'Returns total/active/stale memory counts, database size, Git HEAD info, and engine capabilities.',
-      ].join(' '),
-      inputSchema: {
-        type: 'object',
-        properties: {},
-      },
-      annotations: {
-        readOnlyHint:    true,
-        destructiveHint: false,
-        idempotentHint:  true,
-        openWorldHint:   false,
-      },
-    },
-    {
-      name:        'brain_forget',
-      description: [
-        'Permanently delete a specific memory entry by its integer ID.',
-        'Use brain_recall or brain_trace to find the ID of the memory you want to forget.',
-      ].join(' '),
-      inputSchema: {
-        type: 'object',
-        properties: {
-          memory_id: {
-            type:        'number',
-            description: 'The positive integer ID of the memory to remove.',
-          },
-        },
-        required: ['memory_id'],
-      },
-      annotations: {
-        readOnlyHint:    false,
-        destructiveHint: true,
-        idempotentHint:  true,
-        openWorldHint:   false,
       },
     },
   },

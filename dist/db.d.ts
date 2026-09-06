@@ -31,8 +31,6 @@ export interface Memory {
     supersedes_id: number | null;
     last_validated: string | null;
     token_count: number;
-    importance?: number;
-    confidence?: number;
     embedding: Buffer | null;
     created_at: string;
     updated_at: string;

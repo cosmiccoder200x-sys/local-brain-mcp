@@ -10,8 +10,8 @@
  *  ✅ Fast fallback to structured keyword search if vector matches are sparse
  */
 import { embed, cosineSimilarity, estimateTokens } from './embeddings.js';
-import { buildScopeFilter, derivePackageScope } from './scoping.js';
-// ─── Token Budget ─────────────────────────────────────────────────────────────
+import { buildScopeFilter, derivePackageScope, sanitizeFilePath } from './scoping.js';
+// ─── Constants ────────────────────────────────────────────────────────────────
 export const MAX_RESPONSE_TOKENS = 250;
 // ─── Deterministic Multi-Factor Ranking ────────────────────────────────────────
 /**
@@ -121,7 +121,7 @@ function vectorSearch(db, queryEmbedding, scopeFilter, categoryFilter, statusFil
     scored.sort((a, b) => b.rankScore - a.rankScore);
     return scored;
 }
-// ─── Keyword Fallback ─────────────────────────────────────────────────────────
+// ─── Keyword Search Fallback ──────────────────────────────────────────────────
 function keywordSearch(db, query, scopeFilter, categoryFilter, statusFilter, targetFile, targetPackageScope) {
     const words = query.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 2);
     const pattern = `%${words.slice(0, 3).join('%')}%`;
@@ -160,7 +160,7 @@ function formatMemory(mem) {
         formatted: {
             id: mem.id,
             category: mem.category,
-            summary,
+            summary: mem.summary,
             file_path: mem.file_path,
             files: fileList,
             commit_hash: mem.commit_hash,
@@ -178,7 +178,8 @@ function formatMemory(mem) {
 // ─── Main Recall ──────────────────────────────────────────────────────────────
 export async function recallMemories(db, options) {
     const { query, file_path, max_items = 5, category, include_deprecated = false, min_confidence = 0.0, } = options;
-    const packageScope = derivePackageScope(file_path);
+    const sanitizedPath = sanitizeFilePath(file_path);
+    const packageScope = derivePackageScope(sanitizedPath);
     const scopeFilter = buildScopeFilter(packageScope);
     const categoryFilter = category
         ? { sql: 'AND category = ?', params: [category] }
@@ -196,8 +197,6 @@ export async function recallMemories(db, options) {
     if (candidates.length === 0) {
         candidates = keywordSearch(db, query, scopeFilter, categoryFilter, statusFilter, file_path, packageScope);
     }
-    // Filter below minimum score threshold
-    const filtered = candidates.filter(c => c.finalScore >= min_score);
     const memories = [];
     let totalTokens = 0;
     let truncated = false;

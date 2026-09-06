@@ -30,6 +30,9 @@ export function parseDiffStats(diffOutput) {
  * between two git commits.
  */
 export async function isFileStale(git, filePath, oldHash, newHash, baseline) {
+    const sanitized = sanitizeFilePath(filePath);
+    if (!sanitized)
+        return true;
     try {
         const diff = await git.diff([oldHash, newHash, '--', sanitized]);
         if (!diff.trim())
@@ -46,6 +49,9 @@ export async function isFileStale(git, filePath, oldHash, newHash, baseline) {
 }
 // ─── Current Line Count ───────────────────────────────────────────────────────
 export async function getCurrentLineCount(git, filePath, headHash) {
+    const sanitized = sanitizeFilePath(filePath);
+    if (!sanitized)
+        return 0;
     try {
         const content = await git.show([`${headHash}:${sanitized}`]);
         return content.split('\n').length;

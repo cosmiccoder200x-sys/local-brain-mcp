@@ -233,10 +233,6 @@ export async function ingestGitHistory(
         .map((l: string) => l.split('|')[0]?.trim() ?? '')
         .filter(Boolean);
 
-      const changedFiles = rawFiles
-        .map(f => sanitizeFilePath(f))
-        .filter((f): f is string => f !== null);
-
       const commitData: CommitData = {
         hash,
         message,

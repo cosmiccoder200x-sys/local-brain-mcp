@@ -19,13 +19,6 @@ export declare function parseDiffStats(diffOutput: string): {
 /**
  * Check whether a specific file has changed beyond the stale threshold
  * between two git commits.
- *
- * @param git        simple-git instance
- * @param filePath   repo-relative file path
- * @param oldHash    the commit when the memory was stored
- * @param newHash    current HEAD (or 'HEAD')
- * @param baseline   the line count of the file at oldHash
- * @returns          true if the file should be considered stale
  */
 export declare function isFileStale(git: SimpleGit, filePath: string, oldHash: string, newHash: string, baseline: number): Promise<boolean>;
 export declare function getCurrentLineCount(git: SimpleGit, filePath: string, headHash: string): Promise<number>;

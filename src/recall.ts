@@ -347,8 +347,6 @@ export async function recallMemories(
     );
   }
 
-  // Filter below minimum score threshold
-  const filtered = candidates.filter(c => c.finalScore >= min_score);
 
   const memories: FormattedMemory[] = [];
   let totalTokens = 0;

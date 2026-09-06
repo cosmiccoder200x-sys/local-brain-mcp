@@ -362,14 +362,21 @@ program
   .command('status')
   .description('Show brain DB statistics')
   .option('--repo <path>', 'Repo root', process.cwd())
-  .action((opts) => {
+  .action(async (opts) => {
     const repoPath = path.resolve(opts.repo as string);
     const db       = getDb(resolveDbPath(repoPath));
     const stats    = getDbStats(db);
 
+    const dbFilePath = resolveDbPath(repoPath);
+    let sizeKb = '?';
+    try {
+      const { statSync } = await import('fs');
+      sizeKb = (statSync(dbFilePath).size / 1024).toFixed(1);
+    } catch { /* file may not exist yet */ }
+
     console.log('\n🧠 local-brain status\n');
-    console.log(`   Database:         ${stats.dbPath}`);
-    console.log(`   Size:             ${(stats.sizeBytes / 1024).toFixed(1)} KB`);
+    console.log(`   Database:         ${dbFilePath}`);
+    console.log(`   Size:             ${sizeKb} KB`);
     console.log(`   Total memories:   ${stats.total}`);
     console.log(`   Active:           ${stats.active}`);
     console.log(`   Stale:            ${stats.stale}`);
@@ -419,7 +426,7 @@ program
 
     const repoPath = path.resolve(opts.repo);
     const db       = getDb(resolveDbPath(repoPath));
-    const deleted  = deleteMemory(db, numId);
+    const deleted  = forgetMemory(db, { id: numId, hardDelete: true });
 
     if (deleted) {
       console.log(`\n🗑️ Memory #${numId} deleted successfully.\n`);

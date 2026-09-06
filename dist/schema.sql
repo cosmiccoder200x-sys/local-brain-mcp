@@ -66,8 +66,6 @@ CREATE TABLE IF NOT EXISTS file_snapshots (
   updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_snapshots_file ON file_snapshots(file_path);
-
 -- ------------------------------------------------------------
 -- Ingestion log
 -- ------------------------------------------------------------

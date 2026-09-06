@@ -5,7 +5,7 @@
  * stored directly as Float32Array BLOBs for fast zero-dependency local search.
  */
 import Database from 'better-sqlite3';
-import { readFileSync, mkdirSync, statSync, existsSync } from 'fs';
+import { readFileSync, mkdirSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';

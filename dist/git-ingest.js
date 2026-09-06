@@ -51,7 +51,7 @@ const INCLUDE_PATTERNS = [
     /\bsecurity\b/i, // Security fix
 ];
 // ─── Category & Confidence Inference ─────────────────────────────────────────
-function inferCategory(message) {
+export function inferCategory(message) {
     const m = message.toLowerCase();
     if (/BREAKING CHANGE|!:/i.test(m))
         return 'architecture';
@@ -174,9 +174,6 @@ export async function ingestGitHistory(db, options) {
                 .filter((l) => l.includes('|'))
                 .map((l) => l.split('|')[0]?.trim() ?? '')
                 .filter(Boolean);
-            const changedFiles = rawFiles
-                .map(f => sanitizeFilePath(f))
-                .filter((f) => f !== null);
             const commitData = {
                 hash,
                 message,
@@ -208,9 +205,16 @@ export async function ingestGitHistory(db, options) {
                     console.error(`[ingest] MERGE ${hash.slice(0, 7)} -> id ${dup.match.id}`);
                 continue;
             }
-            const lineCount = primaryFile
-                ? (await git.show([`${hash}:${primaryFile}`]).catch(() => '')).split('\n').length
-                : 0;
+            let lineCount = 0;
+            if (primaryFile) {
+                try {
+                    const content = await git.show([`${hash}:${primaryFile}`]);
+                    lineCount = content.split('\n').length;
+                }
+                catch {
+                    lineCount = 0;
+                }
+            }
             insertMemory(db, {
                 category,
                 content: message,
@@ -229,8 +233,6 @@ export async function ingestGitHistory(db, options) {
                 status: 'active',
                 source: 'git-ingest',
                 token_count: Math.ceil(summary.length / 4),
-                importance,
-                confidence: 1.0,
             }, embedding);
             if (primaryFile) {
                 upsertFileSnapshot(db, primaryFile, hash, lineCount);
