@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { MCP_TOOLS } from '../../dist/mcp-server.js';
 
 describe('MCP Tool Annotations', () => {
-  it('should register exactly the required 6 MCP tools', () => {
+  it('should register all required MCP tools (7 tools in v1.2.0)', () => {
     const toolNames = MCP_TOOLS.map(t => t.name).sort();
     assert.deepEqual(toolNames, [
       'brain_forget',
@@ -12,6 +12,7 @@ describe('MCP Tool Annotations', () => {
       'brain_recall',
       'brain_status',
       'brain_trace',
+      'brain_validate',
     ]);
   });
 
@@ -51,6 +52,17 @@ describe('MCP Tool Annotations', () => {
   it('brain_learn annotations: mutates, non-destructive, non-idempotent', () => {
     const tool = MCP_TOOLS.find(t => t.name === 'brain_learn');
     assert.ok(tool, 'brain_learn tool must exist');
+    assert.deepEqual(tool.annotations, {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    });
+  });
+
+  it('brain_validate annotations: mutates, non-destructive, non-idempotent', () => {
+    const tool = MCP_TOOLS.find(t => t.name === 'brain_validate');
+    assert.ok(tool, 'brain_validate tool must exist');
     assert.deepEqual(tool.annotations, {
       readOnlyHint: false,
       destructiveHint: false,

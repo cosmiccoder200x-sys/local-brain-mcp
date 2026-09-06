@@ -13,14 +13,15 @@ describe('MCP Server End-to-End Lifecycle', () => {
     server = createMcpServer();
   });
 
-  it('1. Initializes server and lists all 6 tools with valid schemas', async () => {
+  it('1. Initializes server and lists all 7 tools with valid schemas', async () => {
     assert.ok(server);
-    assert.equal(MCP_TOOLS.length, 6);
+    assert.equal(MCP_TOOLS.length, 7);
 
     const toolNames = MCP_TOOLS.map(t => t.name);
     assert.ok(toolNames.includes('brain_recall'));
     assert.ok(toolNames.includes('brain_status'));
     assert.ok(toolNames.includes('brain_learn'));
+    assert.ok(toolNames.includes('brain_validate'));
     assert.ok(toolNames.includes('brain_trace'));
     assert.ok(toolNames.includes('brain_forget'));
     assert.ok(toolNames.includes('brain_prune'));

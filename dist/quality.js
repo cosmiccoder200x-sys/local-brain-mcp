@@ -98,4 +98,33 @@ export function extractReferencedFiles(text) {
     }
     return Array.from(validFiles);
 }
+/**
+ * Infers importance level ('low'|'medium'|'high'|'critical') based on content keywords.
+ */
+export function detectImportanceLevel(content) {
+    const lower = content.toLowerCase();
+    if (lower.includes('critical') ||
+        lower.includes('vulnerability') ||
+        lower.includes('security') ||
+        lower.includes('data loss') ||
+        lower.includes('breaking change') ||
+        lower.includes('must not') ||
+        lower.includes('never')) {
+        return 'critical';
+    }
+    if (lower.includes('high') ||
+        lower.includes('architecture') ||
+        lower.includes('convention') ||
+        lower.includes('always') ||
+        lower.includes('important')) {
+        return 'high';
+    }
+    if (lower.includes('low') ||
+        lower.includes('minor') ||
+        lower.includes('trivial') ||
+        lower.includes('cosmetic')) {
+        return 'low';
+    }
+    return 'medium';
+}
 //# sourceMappingURL=quality.js.map

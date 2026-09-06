@@ -1,5 +1,6 @@
 -- ============================================================
 -- local-brain-mcp: Pure SQLite schema with BLOB vector storage
+-- Phase 3: multi-agent provenance, validation, contradiction
 -- ============================================================
 
 -- Enable WAL mode for fast concurrent reads
@@ -10,32 +11,40 @@ PRAGMA foreign_keys = ON;
 -- Core memories table
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS memories (
-  id             INTEGER PRIMARY KEY AUTOINCREMENT,
-  category       TEXT NOT NULL CHECK(category IN ('fix', 'architecture', 'convention', 'bug', 'manual')),
-  content        TEXT NOT NULL,          -- full lesson / explanation
-  summary        TEXT NOT NULL,          -- compact 1-2 sentence summary
-  file_path      TEXT,                   -- primary relative file path (e.g. src/auth/jwt.ts)
-  files          TEXT,                   -- JSON array of all associated files (e.g. ["src/auth.ts"])
-  package_scope  TEXT,                   -- monorepo package prefix (e.g. packages/auth)
-  commit_hash    TEXT,                   -- git commit hash when memory was stored
-  git_ref        TEXT,                   -- git branch / tag at storage time
-  author         TEXT,                   -- author of commit or manual entry
-  branch         TEXT,                   -- active git branch
-  project        TEXT,                   -- project or repository identifier
-  confidence     REAL NOT NULL DEFAULT 1.0, -- confidence score (0.0 to 1.0)
-  importance     REAL NOT NULL DEFAULT 1.0, -- importance multiplier (0.1 to 2.0)
-  quality_score  REAL NOT NULL DEFAULT 1.0, -- computed heuristic quality score
-  status         TEXT NOT NULL DEFAULT 'active'
-                      CHECK(status IN ('active', 'stale', 'deprecated')),
-  source         TEXT DEFAULT 'git-ingest'
-                      CHECK(source IN ('git-ingest', 'manual', 'session')),
-  superseded_by  INTEGER REFERENCES memories(id) ON DELETE SET NULL,
-  supersedes_id  INTEGER REFERENCES memories(id) ON DELETE SET NULL,
-  last_validated DATETIME DEFAULT CURRENT_TIMESTAMP,
-  token_count    INTEGER DEFAULT 0,      -- pre-computed token count of summary
-  embedding      BLOB,                   -- Float32Array stored as raw binary BLOB (384 floats)
-  created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  category           TEXT NOT NULL CHECK(category IN ('fix', 'architecture', 'convention', 'bug', 'manual')),
+  content            TEXT NOT NULL,          -- full lesson / explanation
+  summary            TEXT NOT NULL,          -- compact 1-2 sentence summary
+  file_path          TEXT,                   -- primary relative file path (e.g. src/auth/jwt.ts)
+  files              TEXT,                   -- JSON array of all associated files (e.g. ["src/auth.ts"])
+  package_scope      TEXT,                   -- monorepo package prefix (e.g. packages/auth)
+  commit_hash        TEXT,                   -- git commit hash when memory was stored
+  git_ref            TEXT,                   -- git branch / tag at storage time
+  author             TEXT,                   -- author of commit or manual entry
+  branch             TEXT,                   -- active git branch
+  project            TEXT,                   -- project or repository identifier
+  project_id         TEXT,                   -- normalized 8-char hash of git remote / path
+  agent              TEXT NOT NULL DEFAULT 'unknown', -- AI agent that stored this memory
+  validated_by       TEXT,                   -- agent that last validated this memory
+  validation_count   INTEGER NOT NULL DEFAULT 0, -- number of times validated/confirmed
+  contradiction_flag INTEGER NOT NULL DEFAULT 0, -- 1 = active contradiction with another memory
+  contradiction_ids  TEXT,                   -- JSON array of conflicting memory IDs
+  importance_level   TEXT NOT NULL DEFAULT 'medium'
+                         CHECK(importance_level IN ('low', 'medium', 'high', 'critical')),
+  confidence         REAL NOT NULL DEFAULT 1.0, -- confidence score (0.0 to 1.0)
+  importance         REAL NOT NULL DEFAULT 1.0, -- importance multiplier (0.1 to 2.0)
+  quality_score      REAL NOT NULL DEFAULT 1.0, -- computed heuristic quality score
+  status             TEXT NOT NULL DEFAULT 'active'
+                         CHECK(status IN ('active', 'stale', 'deprecated')),
+  source             TEXT DEFAULT 'git-ingest'
+                         CHECK(source IN ('git-ingest', 'manual', 'session')),
+  superseded_by      INTEGER REFERENCES memories(id) ON DELETE SET NULL,
+  supersedes_id      INTEGER REFERENCES memories(id) ON DELETE SET NULL,
+  last_validated     DATETIME DEFAULT CURRENT_TIMESTAMP,
+  token_count        INTEGER DEFAULT 0,      -- pre-computed token count of summary
+  embedding          BLOB,                   -- Float32Array stored as raw binary BLOB (384 floats)
+  created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Indexing for fast queries
@@ -47,6 +56,9 @@ CREATE INDEX IF NOT EXISTS idx_memories_commit        ON memories(commit_hash);
 CREATE INDEX IF NOT EXISTS idx_memories_superseded_by ON memories(superseded_by);
 CREATE INDEX IF NOT EXISTS idx_memories_branch        ON memories(branch);
 CREATE INDEX IF NOT EXISTS idx_memories_project       ON memories(project);
+CREATE INDEX IF NOT EXISTS idx_memories_project_id    ON memories(project_id);
+CREATE INDEX IF NOT EXISTS idx_memories_agent         ON memories(agent);
+CREATE INDEX IF NOT EXISTS idx_memories_contradiction ON memories(contradiction_flag);
 
 -- Trigger to auto-update updated_at
 CREATE TRIGGER IF NOT EXISTS memories_updated_at
@@ -65,6 +77,8 @@ CREATE TABLE IF NOT EXISTS file_snapshots (
   line_count    INTEGER DEFAULT 0,
   updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX IF NOT EXISTS idx_snapshots_file ON file_snapshots(file_path);
 
 -- ------------------------------------------------------------
 -- Ingestion log

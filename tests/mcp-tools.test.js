@@ -72,25 +72,27 @@ after(async () => {
   await rm(tempHome, { recursive: true, force: true });
 });
 
-test('registers exactly six tools with complete boolean annotations', async () => {
+test('registers all MCP tools with complete boolean annotations', async () => {
   const result = await request('tools/list');
   const toolNames = result.tools.map(tool => tool.name);
   assert.deepEqual(toolNames, [
     'brain_recall',
-    'brain_learn',
-    'brain_trace',
-    'brain_prune',
     'brain_status',
+    'brain_learn',
+    'brain_validate',
+    'brain_trace',
     'brain_forget',
+    'brain_prune',
   ]);
 
   const expectedAnnotations = {
-    brain_recall: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    brain_learn:  { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
-    brain_trace:  { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    brain_prune:  { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
-    brain_status: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    brain_forget: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    brain_recall:   { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    brain_status:   { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    brain_learn:    { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    brain_validate: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    brain_trace:    { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    brain_forget:   { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    brain_prune:    { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
   };
 
   for (const tool of result.tools) {
@@ -106,8 +108,8 @@ test('brain_status returns operational telemetry without leaking secrets', async
   });
   assert.equal(result.isError, undefined);
   const text = textOf(result);
-  assert.match(text, /Local Brain Status/);
-  assert.match(text, /Server Version:\s+vv?1\.1\.0/);
+  assert.match(text, /Local Brain.*Status/);
+  assert.match(text, /Server Version:\s+v?1\.[12]\.0/);
   assert.match(text, /Total Memories:/);
   assert.match(text, /Embedding Engine:/);
   assert.match(text, /Ranking:/);

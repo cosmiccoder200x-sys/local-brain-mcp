@@ -5,7 +5,7 @@
  * high-signal engineering knowledge while rejecting ephemeral shell commands,
  * raw debug logs, and trivial noise.
  */
-import type { MemoryCategory } from './db.js';
+import type { MemoryCategory, ImportanceLevel } from './db.js';
 export interface QualityAssessment {
     isQuality: boolean;
     score: number;
@@ -20,4 +20,8 @@ export declare function evaluateMemoryQuality(content: string, category?: Memory
  * Extracts referenced file paths from memory text or markdown.
  */
 export declare function extractReferencedFiles(text: string): string[];
+/**
+ * Infers importance level ('low'|'medium'|'high'|'critical') based on content keywords.
+ */
+export declare function detectImportanceLevel(content: string): ImportanceLevel;
 //# sourceMappingURL=quality.d.ts.map

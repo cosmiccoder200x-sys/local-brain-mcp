@@ -77,12 +77,22 @@ export function inferCategory(message: string): MemoryCategory {
   return 'convention';
 }
 
+export function inferImportance(message: string): number {
+  const m = message.toLowerCase();
+  if (/breaking change|!:/i.test(m)) return 1.5;
+  if (/critical|security|vulnerability/i.test(m)) return 1.4;
+  if (/hotfix/i.test(m)) return 1.3;
+  if (/^fix/i.test(m)) return 1.2;
+  if (/^feat/i.test(m)) return 1.1;
+  return 1.0;
+}
+
 function inferConfidenceAndImportance(message: string, category: MemoryCategory): {
   confidence: number;
   importance: number;
 } {
   let confidence = 0.90;
-  let importance = 1.00;
+  let importance = inferImportance(message);
 
   if (/BREAKING CHANGE|!:/i.test(message)) {
     confidence = 0.98;
@@ -103,22 +113,23 @@ function inferConfidenceAndImportance(message: string, category: MemoryCategory)
 
 // ─── Commit Content Builder ───────────────────────────────────────────────────
 
-interface CommitData {
+export interface CommitData {
   hash:     string;
   message:  string;
   diff:     string;
   files:    string[];
-  author:   string;
-  branch:   string;
+  author?:  string;
+  branch?:  string;
+  ref?:     string;
 }
 
-function buildCommitSummary(commit: CommitData): string {
-  const files = commit.files.slice(0, 5).join(', ');
-  const extraFiles = commit.files.length > 5
+export function buildCommitSummary(commit: CommitData): string {
+  const files = commit.files ? commit.files.slice(0, 5).join(', ') : '';
+  const extraFiles = commit.files && commit.files.length > 5
     ? ` (+${commit.files.length - 5} more)`
     : '';
 
-  const diffSnippet = commit.diff.slice(0, 500).trim();
+  const diffSnippet = commit.diff ? commit.diff.slice(0, 500).trim() : '';
   const isBreaking = /BREAKING CHANGE|!:/i.test(commit.message) ? '[BREAKING CHANGE] ' : '';
 
   return [

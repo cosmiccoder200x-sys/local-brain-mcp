@@ -13,6 +13,17 @@
 import Database from 'better-sqlite3';
 import { type MemoryCategory } from './db.js';
 export declare function inferCategory(message: string): MemoryCategory;
+export declare function inferImportance(message: string): number;
+export interface CommitData {
+    hash: string;
+    message: string;
+    diff: string;
+    files: string[];
+    author?: string;
+    branch?: string;
+    ref?: string;
+}
+export declare function buildCommitSummary(commit: CommitData): string;
 export declare function isHighSignalCommit(message: string): boolean;
 export interface IngestOptions {
     repoPath: string;

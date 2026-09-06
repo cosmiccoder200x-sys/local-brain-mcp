@@ -2,14 +2,15 @@
  * mcp-server.ts — MCP Server exposing persistent AI memory tools via stdio transport.
  *
  * Tools:
- *  - brain_recall : semantic memory search (multi-factor ranked, token-capped, scoped)
- *  - brain_status : brain health, statistics, and git repository state
- *  - brain_learn  : store durable knowledge, rules, decisions, bug fixes with quality guard
- *  - brain_trace  : full chronological memory & fix history for a file
- *  - brain_forget : remove or deprecate specific memories by ID, path, or query
- *  - brain_prune  : clean up stale or deprecated memories after refactors
+ *  - brain_recall   : semantic memory search (multi-factor ranked, token-capped, scoped, multi-agent)
+ *  - brain_status   : brain health, diagnostics, agent breakdown, validation stats
+ *  - brain_learn    : store durable knowledge, rules, decisions with quality guard & contradiction check
+ *  - brain_validate : validate & reinforce existing memory usefulness across agents
+ *  - brain_trace    : full chronological memory & fix history for a file with agent provenance
+ *  - brain_forget   : remove or deprecate specific memories by ID, path, or query
+ *  - brain_prune    : clean up stale or deprecated memories after refactors
  *
- * Compatible with: Claude Code, Cursor, GitHub Copilot, Windsurf, Zed.
+ * Compatible with: Claude Code, Cursor, Antigravity, GitHub Copilot, Windsurf, Zed.
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -30,6 +31,9 @@ import {
   getDbStats,
   findDuplicateMemory,
   mergeMemory,
+  validateMemory,
+  detectContradictions,
+  markContradiction,
   resolveDbPath,
   type MemoryCategory,
 } from './db.js';
@@ -37,12 +41,13 @@ import { embed, warmupEmbeddings, estimateTokens } from './embeddings.js';
 import { recallMemories, formatRecallMarkdown, traceFile } from './recall.js';
 import { runInvalidationPass } from './invalidation.js';
 import { derivePackageScope } from './scoping.js';
-import { evaluateMemoryQuality, extractReferencedFiles } from './quality.js';
+import { evaluateMemoryQuality, extractReferencedFiles, detectImportanceLevel } from './quality.js';
+import { detectAgent, normalizeAgentId, getProjectId, type AgentId, type ImportanceLevel } from './provenance.js';
 
 // ─── Server State ─────────────────────────────────────────────────────────────
 
 const SERVER_NAME    = 'local-brain-mcp';
-const SERVER_VERSION = '1.1.0';
+const SERVER_VERSION = '1.2.0';
 
 const VALID_CATEGORIES: ReadonlySet<string> = new Set([
   'fix',
@@ -67,10 +72,11 @@ export const MCP_TOOLS: Tool[] = [
   {
     name: 'brain_recall',
     description: [
-      'Semantically search your local codebase memory.',
+      'Semantically search your local codebase memory across all agents.',
       'Returns the most relevant lessons, bug fixes, architecture decisions, and conventions',
       'from your git history and AI sessions — filtered to current file and package scope.',
-      'Results are ranked deterministically and token-capped to stay within 250 tokens.',
+      'Results are ranked deterministically with validation boost and contradiction penalties,',
+      'token-capped to stay within 250 tokens.',
     ].join(' '),
     annotations: {
       readOnlyHint:    true,
@@ -109,6 +115,10 @@ export const MCP_TOOLS: Tool[] = [
           description: 'Optional: include stale and deprecated memories (default: false).',
           default:     false,
         },
+        agent_filter: {
+          type:        'string',
+          description: 'Optional: filter memories created by a specific agent (e.g. "claude-code", "cursor", "antigravity").',
+        },
       },
       required: ['query'],
     },
@@ -116,9 +126,9 @@ export const MCP_TOOLS: Tool[] = [
   {
     name: 'brain_status',
     description: [
-      'Get system diagnostics and memory statistics for Local Brain.',
-      'Returns memory count, breakdown by status (active/stale/deprecated),',
-      'source breakdown (git vs manual), and database storage path.',
+      'Get system diagnostics, memory statistics, multi-agent breakdown, and validation health.',
+      'Returns total memory count, breakdown by agent, validation counts, contradiction flags,',
+      'and database storage path.',
     ].join(' '),
     annotations: {
       readOnlyHint:    true,
@@ -135,7 +145,8 @@ export const MCP_TOOLS: Tool[] = [
     name: 'brain_learn',
     description: [
       'Store a new durable lesson, architecture decision, bug root-cause, or team convention.',
-      'Includes automatic quality evaluation, deduplication, provenance tracking, and supersession.',
+      'Includes automatic multi-agent attribution, quality evaluation, deduplication,',
+      'contradiction detection, and supersession tracking.',
       'Examples: "Never use RS256 in dev", "JWT refresh token expires in 7d; rotate on each use".',
     ].join(' '),
     annotations: {
@@ -176,6 +187,15 @@ export const MCP_TOOLS: Tool[] = [
           description: 'Importance multiplier from 0.1 to 2.0 (default: 1.0).',
           default:     1.0,
         },
+        importance_level: {
+          type:        'string',
+          enum:        ['low', 'medium', 'high', 'critical'],
+          description: 'Optional: importance level (default: automatically detected from content).',
+        },
+        agent: {
+          type:        'string',
+          description: 'Optional: agent name creating this memory (e.g. "claude-code", "cursor", "antigravity"). Auto-detected if omitted.',
+        },
         supersedes_id: {
           type:        'number',
           description: 'Optional: ID of an older memory that is superseded/replaced by this new lesson.',
@@ -185,10 +205,37 @@ export const MCP_TOOLS: Tool[] = [
     },
   },
   {
+    name: 'brain_validate',
+    description: [
+      'Validate that an existing memory was helpful and correct in the current session.',
+      'Increments the memory validation count, records the validating agent, and boosts confidence.',
+    ].join(' '),
+    annotations: {
+      readOnlyHint:    false,
+      destructiveHint: false,
+      idempotentHint:  false,
+      openWorldHint:   false,
+    },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type:        'number',
+          description: 'The memory ID to validate.',
+        },
+        agent: {
+          type:        'string',
+          description: 'Optional: validating agent identifier. Auto-detected if omitted.',
+        },
+      },
+      required: ['id'],
+    },
+  },
+  {
     name: 'brain_trace',
     description: [
-      'Show all memory entries associated with a specific file.',
-      'Returns the full fix history, architecture decisions, and past bugs',
+      'Show all memory entries associated with a specific file across all agents.',
+      'Returns the full fix history, architecture decisions, past bugs, and agent attribution',
       'for that file in chronological order. Includes confidence and status flags.',
     ].join(' '),
     annotations: {
@@ -227,6 +274,10 @@ export const MCP_TOOLS: Tool[] = [
         id: {
           type:        'number',
           description: 'Exact memory ID to forget.',
+        },
+        memory_id: {
+          type:        'number',
+          description: 'Alias for id.',
         },
         file_path: {
           type:        'string',
@@ -282,7 +333,7 @@ export function createMcpServer(): Server {
   const server = new Server(
     {
       name:    'local-brain-mcp',
-      version: '1.1.0',
+      version: SERVER_VERSION,
     },
     {
       capabilities: {
@@ -300,16 +351,30 @@ export function createMcpServer(): Server {
 
     // ── brain_recall ──────────────────────────────────────────────────────────
     if (name === 'brain_recall') {
-      const query              = String(args?.query ?? '').trim();
+      const rawQuery = args?.query;
+      const query = typeof rawQuery === 'string' ? rawQuery.trim() : '';
+
+      if (!query) {
+        return { content: [{ type: 'text', text: 'Error: query is required.' }], isError: true };
+      }
+
+      if (args?.max_items !== undefined) {
+        const mi = Number(args.max_items);
+        if (typeof args.max_items !== 'number' || isNaN(mi) || !Number.isFinite(mi) || mi <= 0) {
+          return { content: [{ type: 'text', text: 'Error: max_items must be a valid integer > 0.' }], isError: true };
+        }
+      }
+
+      if (args?.category && !VALID_CATEGORIES.has(String(args.category))) {
+        return { content: [{ type: 'text', text: `Error: Invalid category '${String(args.category)}'. Valid: ${Array.from(VALID_CATEGORIES).join(', ')}` }], isError: true };
+      }
+
       const file_path          = args?.file_path ? String(args.file_path) : undefined;
       const max_items          = Math.min(Math.max(1, Number(args?.max_items ?? 5)), 10);
       const category           = args?.category as MemoryCategory | undefined;
       const min_confidence     = typeof args?.min_confidence === 'number' ? Number(args.min_confidence) : 0.0;
       const include_deprecated = Boolean(args?.include_deprecated ?? false);
-
-      if (!query) {
-        return { content: [{ type: 'text', text: 'Error: query is required.' }], isError: true };
-      }
+      const agent_filter       = args?.agent_filter ? String(args.agent_filter).trim() : undefined;
 
       try {
         const result = await recallMemories(db, {
@@ -319,6 +384,7 @@ export function createMcpServer(): Server {
           category,
           min_confidence,
           include_deprecated,
+          agent_filter,
         });
         const markdown = formatRecallMarkdown(result, query);
 
@@ -339,6 +405,7 @@ export function createMcpServer(): Server {
     // ── brain_status ──────────────────────────────────────────────────────────
     if (name === 'brain_status') {
       const stats = getDbStats(db);
+      const projectId = getProjectId();
       let headHash = 'unknown';
       let headBranch = 'unknown';
       try {
@@ -346,14 +413,25 @@ export function createMcpServer(): Server {
         headBranch = (await git.revparse(['--abbrev-ref', 'HEAD'])).trim();
       } catch { /* not a git repo */ }
 
+      const agentList = Object.entries(stats.agent_breakdown)
+        .map(([ag, count]) => `${ag}: ${count}`)
+        .join(', ') || 'none';
+
       const statusText = [
-        '🧠 **Local Brain MCP Status**',
+        '🧠 **Local Brain MCP Status (v1.2.0)**',
+        `• Server Version: v${SERVER_VERSION}`,
         `• **Database Path:** \`${resolveDbPath()}\``,
+        `• **Project ID:** \`${projectId}\``,
         `• **Git Head:** \`${headBranch}\` @ \`${headHash}\``,
         `• **Total Memories:** ${stats.total}`,
         `• **Active:** ${stats.active}`,
         `• **Stale:** ${stats.stale}`,
         `• **Deprecated / Superseded:** ${stats.deprecated} (${stats.superseded} superseded)`,
+        `• **Validated Memories:** ${stats.validated}`,
+        `• **Contradictions Flagged:** ${stats.contradicted}`,
+        `• **Agent Breakdown:** ${agentList}`,
+        `• **Embedding Engine:** Local pure Float32Array cosine similarity (384-dim)`,
+        `• **Ranking:** Multi-factor deterministic with recency decay`,
         `• **Source:** ${stats.from_git} from Git history, ${stats.manual} manual/AI lessons`,
         `• **Commits Ingested:** ${stats.commits_ingested}`,
         `• **Tracked File Snapshots:** ${stats.file_snapshots}`,
@@ -369,16 +447,24 @@ export function createMcpServer(): Server {
 
     // ── brain_learn ───────────────────────────────────────────────────────────
     if (name === 'brain_learn') {
-      const lesson        = String(args?.lesson ?? '').trim();
-      const category      = (args?.category as MemoryCategory) ?? 'manual';
-      let file_path       = args?.file_path ? String(args.file_path).trim() : null;
-      const rawFiles      = args?.files;
-      const confidence    = typeof args?.confidence === 'number' ? Number(args.confidence) : 1.0;
-      const importance    = typeof args?.importance === 'number' ? Number(args.importance) : 1.0;
-      const supersedes_id = typeof args?.supersedes_id === 'number' ? Number(args.supersedes_id) : undefined;
+      const lessonRaw        = args?.lesson;
+      const lesson           = typeof lessonRaw === 'string' ? lessonRaw.trim() : '';
+      const category         = (args?.category as MemoryCategory) ?? 'manual';
+      let file_path          = args?.file_path ? String(args.file_path).trim() : null;
+      const rawFiles         = args?.files;
+      const confidence       = typeof args?.confidence === 'number' ? Number(args.confidence) : 1.0;
+      const importance       = typeof args?.importance === 'number' ? Number(args.importance) : 1.0;
+      const rawAgent         = args?.agent ? String(args.agent).trim() : undefined;
+      const agent: AgentId   = rawAgent ? normalizeAgentId(rawAgent) : detectAgent();
+      const importance_level: ImportanceLevel = (args?.importance_level as ImportanceLevel) || detectImportanceLevel(lesson);
+      const supersedes_id    = typeof args?.supersedes_id === 'number' ? Number(args.supersedes_id) : undefined;
 
       if (!lesson) {
         return { content: [{ type: 'text', text: 'Error: lesson is required.' }], isError: true };
+      }
+
+      if (lesson.length > 10000) {
+        return { content: [{ type: 'text', text: 'Error: lesson exceeds maximum length of 10000 characters.' }], isError: true };
       }
 
       // Memory quality guard
@@ -413,6 +499,7 @@ export function createMcpServer(): Server {
         headRef  = (await git.revparse(['--abbrev-ref', 'HEAD'])).trim();
       } catch { /* not a git repo */ }
 
+      const projectId = getProjectId();
       const packageScope = derivePackageScope(file_path);
       const embedding = embed(lesson);
 
@@ -426,43 +513,95 @@ export function createMcpServer(): Server {
           file_path,
           confidence,
           importance,
+          agent,
+          project_id: projectId,
         });
+
+        const dupDesc = dup.isExact
+          ? 'Exact matching memory already exists in local brain (merged).'
+          : `Knowledge updated in existing memory (id: ${dup.match.id}, ${Math.round(dup.similarity * 100)}% similarity)`;
 
         return {
           content: [{
             type: 'text',
-            text: `🔄 Knowledge updated in existing memory (id: ${dup.match.id}, ${dup.isExact ? 'exact match' : `${Math.round(dup.similarity * 100)}% similarity`})\n• Category: ${category}\n• File: ${file_path ?? 'general'}\n• Confidence: ${Math.round(confidence * 100)}%`,
+            text: `🔄 ${dupDesc}\n• Agent: ${agent}\n• Category: ${category}\n• File: ${file_path ?? 'general'}\n• Confidence: ${Math.round(confidence * 100)}%`,
           }],
         };
       }
 
+      // Contradiction detection
+      const contradictionCheck = detectContradictions(db, embedding, lesson, projectId);
+      const contradictionFlag = contradictionCheck.contradictedIds.length > 0 ? 1 : 0;
+      const contradictionIdsJson = contradictionFlag === 1 ? JSON.stringify(contradictionCheck.contradictedIds) : null;
+
       const rowid = insertMemory(db, {
         category,
-        content:        lesson,
-        summary:        lesson.slice(0, 400),
+        content:            lesson,
+        summary:            lesson.slice(0, 400),
         file_path,
-        files:          JSON.stringify(filesList),
-        package_scope:  packageScope,
-        commit_hash:    headHash,
-        git_ref:        headRef,
-        branch:         headRef,
+        files:              JSON.stringify(filesList),
+        package_scope:      packageScope,
+        commit_hash:        headHash,
+        git_ref:            headRef,
+        branch:             headRef,
+        project_id:         projectId,
+        agent,
+        importance_level,
+        contradiction_flag: contradictionFlag,
+        contradiction_ids:  contradictionIdsJson,
         confidence,
         importance,
-        quality_score:  quality.score,
-        status:         'active',
-        source:         'manual',
-        supersedes_id:  supersedes_id ?? null,
-        token_count:    estimateTokens(lesson),
+        quality_score:      quality.score,
+        status:             'active',
+        source:             'manual',
+        supersedes_id:      supersedes_id ?? null,
+        token_count:        estimateTokens(lesson),
       }, embedding);
 
       insertEmbedding(db, rowid, embedding);
 
+      // Mark contradictions bilaterally
+      if (contradictionCheck.contradictedIds.length > 0) {
+        for (const cid of contradictionCheck.contradictedIds) {
+          markContradiction(db, rowid, cid);
+        }
+      }
+
       const supersedesMsg = supersedes_id ? `\n• Supersedes memory id: ${supersedes_id}` : '';
+      const contradictionMsg = contradictionFlag === 1
+        ? `\n⚠️ Contradiction detected with active memories: ${contradictionCheck.contradictedIds.map(i => `#${i}`).join(', ')}`
+        : '';
 
       return {
         content: [{
           type: 'text',
-          text: `✅ Memory stored (id: ${rowid})\n• Category: ${category}\n• File: ${file_path ?? 'general'}\n• Commit: ${headHash?.slice(0, 7) ?? 'n/a'}\n• Quality score: ${quality.score}\n• Confidence: ${Math.round(confidence * 100)}%${supersedesMsg}`,
+          text: `✅ Memory stored (id: ${rowid})\n• Agent: ${agent}\n• Category: ${category}\n• File: ${file_path ?? 'general'}\n• Importance: ${importance_level}\n• Commit: ${headHash?.slice(0, 7) ?? 'n/a'}\n• Quality score: ${quality.score}\n• Confidence: ${Math.round(confidence * 100)}%${supersedesMsg}${contradictionMsg}`,
+        }],
+      };
+    }
+
+    // ── brain_validate ────────────────────────────────────────────────────────
+    if (name === 'brain_validate') {
+      const id = typeof args?.id === 'number' ? Number(args.id) : undefined;
+      const rawAgent = args?.agent ? String(args.agent).trim() : undefined;
+      const agent: AgentId = rawAgent ? normalizeAgentId(rawAgent) : detectAgent();
+
+      if (id === undefined) {
+        return { content: [{ type: 'text', text: 'Error: id is required.' }], isError: true };
+      }
+
+      const ok = validateMemory(db, id, agent);
+      if (!ok) {
+        return {
+          content: [{ type: 'text', text: `Error: Memory #${id} not found.` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `✨ Memory #${id} validated by agent '${agent}'. Validation count and confidence incremented.`,
         }],
       };
     }
@@ -486,8 +625,10 @@ export function createMcpServer(): Server {
         const status = m.status !== 'active' ? ` [${m.status.toUpperCase()}]` : '';
         const superseded = m.superseded_by ? ` [SUPERSEDED by #${m.superseded_by}]` : '';
         const commit = m.commit_hash ? ` @ ${m.commit_hash.slice(0, 7)}` : '';
+        const agentTag = m.agent && m.agent !== 'unknown' ? ` [agent: ${m.agent}]` : '';
+        const valTag = (m.validation_count ?? 0) > 0 ? ` [validated: ${m.validation_count}×]` : '';
         const conf = ` (${Math.round((m.confidence ?? 1.0) * 100)}% conf)`;
-        return `• #${m.id} [${m.category}${status}${superseded}${commit}${conf}]: ${m.summary.slice(0, 200)}`;
+        return `• #${m.id} [${m.category}${status}${superseded}${agentTag}${valTag}${commit}${conf}]: ${m.summary.slice(0, 200)}`;
       });
 
       return {
@@ -500,10 +641,12 @@ export function createMcpServer(): Server {
 
     // ── brain_forget ──────────────────────────────────────────────────────────
     if (name === 'brain_forget') {
-      const id         = typeof args?.id === 'number' ? Number(args.id) : undefined;
+      const id         = typeof args?.id === 'number' ? Number(args.id) : (typeof args?.memory_id === 'number' ? Number(args.memory_id) : undefined);
       const file_path  = args?.file_path ? String(args.file_path).trim() : undefined;
       const query      = args?.query ? String(args.query).trim() : undefined;
-      const hardDelete = Boolean(args?.hard_delete ?? false);
+      const hardDelete = typeof args?.hard_delete === 'boolean'
+        ? args.hard_delete
+        : (typeof args?.memory_id === 'number' ? true : false);
 
       if (id === undefined && !file_path && !query) {
         return {
@@ -515,16 +658,20 @@ export function createMcpServer(): Server {
       const result = forgetMemory(db, { id, filePath: file_path, query, hardDelete });
 
       if (result.count === 0) {
+        const msg = id !== undefined
+          ? `Memory #${id} was not found.`
+          : 'No matching memories found to forget.';
         return {
-          content: [{ type: 'text', text: 'No matching memories found to forget.' }],
+          content: [{ type: 'text', text: msg }],
+          isError: true,
         };
       }
 
-      const action = hardDelete ? 'Permanently deleted' : 'Deprecated';
+      const action = hardDelete ? 'permanently deleted' : 'Deprecated';
       return {
         content: [{
           type: 'text',
-          text: `🗑️ ${action} ${result.count} memory record(s) (IDs: ${result.affectedIds.join(', ')}).`,
+          text: `🗑️ Memory ${action} successfully (${result.count} record(s): ${result.affectedIds.join(', ')}).`,
         }],
       };
     }

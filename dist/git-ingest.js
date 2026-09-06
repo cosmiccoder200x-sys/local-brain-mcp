@@ -67,9 +67,23 @@ export function inferCategory(message) {
         return 'bug';
     return 'convention';
 }
+export function inferImportance(message) {
+    const m = message.toLowerCase();
+    if (/breaking change|!:/i.test(m))
+        return 1.5;
+    if (/critical|security|vulnerability/i.test(m))
+        return 1.4;
+    if (/hotfix/i.test(m))
+        return 1.3;
+    if (/^fix/i.test(m))
+        return 1.2;
+    if (/^feat/i.test(m))
+        return 1.1;
+    return 1.0;
+}
 function inferConfidenceAndImportance(message, category) {
     let confidence = 0.90;
-    let importance = 1.00;
+    let importance = inferImportance(message);
     if (/BREAKING CHANGE|!:/i.test(message)) {
         confidence = 0.98;
         importance = 1.80;
@@ -88,12 +102,12 @@ function inferConfidenceAndImportance(message, category) {
     }
     return { confidence, importance };
 }
-function buildCommitSummary(commit) {
-    const files = commit.files.slice(0, 5).join(', ');
-    const extraFiles = commit.files.length > 5
+export function buildCommitSummary(commit) {
+    const files = commit.files ? commit.files.slice(0, 5).join(', ') : '';
+    const extraFiles = commit.files && commit.files.length > 5
         ? ` (+${commit.files.length - 5} more)`
         : '';
-    const diffSnippet = commit.diff.slice(0, 500).trim();
+    const diffSnippet = commit.diff ? commit.diff.slice(0, 500).trim() : '';
     const isBreaking = /BREAKING CHANGE|!:/i.test(commit.message) ? '[BREAKING CHANGE] ' : '';
     return [
         `Commit: ${isBreaking}${commit.message.trim()}`,

@@ -1,31 +1,35 @@
 [![M8ven Score](https://m8ven.ai/badge/mcp/cosmiccoder200x-sys-local-brain-mcp-1eus5c)](https://m8ven.ai/mcp/cosmiccoder200x-sys-local-brain-mcp-1eus5c)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
+[![Node Version](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen.svg)](https://nodejs.org/)
 
-# 🧠 local-brain-mcp
+# 🧠 local-brain-mcp (v1.2.0)
 
-> **Local-first, Git-aware persistent memory for AI coding assistants.**
+> **Shared, local-first memory layer for multi-agent software development.**
 
-Local Brain is a lightweight [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that indexes your repository's Git history and manual engineering decisions into an embedded SQLite vector database. It equips AI coding assistants (Claude Code, Cursor, GitHub Copilot, Windsurf, Zed) with long-term codebase memory—100% offline, zero egress, and zero cloud API keys.
+Local Brain is a high-performance [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that indexes your repository's Git history and AI engineering decisions into an embedded SQLite vector database.
+
+When multiple coding assistants (**Claude Code, Cursor, Antigravity, GitHub Copilot, Windsurf, Zed**) collaborate on the same repository, they share, validate, and evolve the same durable engineering memory—**100% offline, zero cloud egress, and zero external database dependencies.**
 
 ---
 
-## 📖 Table of Contents
+## 🚀 Key Advantages
 
-| Problem with cloud AI memory tools | How local-brain solves it |
+| Problem with standard AI memory tools | How Local Brain MCP solves it |
 |---|---|
-| 🐌 150–800ms network latency per recall | ⚡ < 5ms — local SQLite vector search |
-| ☁️ Your code sent to foreign servers | 🔒 100% on-device, zero egress |
-| 💸 Token bloat on every session | 📦 Hard 250-token budget cap per recall |
-| 🗑️ Stale outdated context from old decisions | 🔄 Git-diff invalidation marks old memories STALE |
-| 🌊 WIP/typo commits pollute the brain | 🎯 Quality filter keeps only high-signal lessons |
-| 🏗️ Monorepo noise across packages | 🎯 Path-scoped queries, per-package namespacing |
-| 🔁 Duplicate memories waste tokens | 🧬 Smart deduplication + merge on ingest |
-| 🤷 No record of how a decision evolved | 🔍 Full memory lineage with `brain_trace` |
+| 🐌 150–800ms network latency per recall | ⚡ **< 5ms** — local embedded SQLite vector search |
+| ☁️ Source code sent to foreign servers | 🔒 **100% on-device**, zero egress, total privacy |
+| 💸 Context bloat on every session | 📦 **Hard 250-token budget cap** per recall |
+| 🤖 Agent isolation (Claude vs Cursor silos) | 🤝 **Shared multi-agent memory** with provenance |
+| 🗑️ Outdated context from refactored code | 🔄 **Git-diff invalidation** marks old memories STALE |
+| ⚔️ Conflicting or outdated guidelines | ⚠️ **Contradiction detection** + 0.60× ranking penalty |
+| 🌊 WIP/typo commits pollute memory | 🎯 **Quality filter** keeps only high-signal lessons |
+| 🏗️ Monorepo noise across packages | 🎯 **Path-scoped queries**, per-package namespacing |
+| 🔁 Duplicate memories waste tokens | 🧬 **Smart deduplication + merge** on ingest |
+| 🔍 Decisions lost over time | 📜 **Full memory lineage & trace** across agents |
 
 ---
 
-## Quick Start
+## ⚡ Quick Start
 
 ```bash
 # 1. Navigate to your Git repository
@@ -37,384 +41,154 @@ npx local-brain init
 # 3. Ingest your Git history into the local brain database
 npx local-brain ingest
 
-# 4. Check memory database statistics
+# 4. Check multi-agent memory statistics
 npx local-brain status
 
-# 5. Restart your AI editor (Claude Code, Cursor, Copilot, Windsurf, Zed)
+# 5. Start collaborating with Claude Code, Cursor, Antigravity, Copilot, or Windsurf!
 ```
 
 ---
 
-## Editor / MCP Setup
+## 🛠️ MCP Tools Reference (7 Tools)
 
-All tools carry [MCP 1.5 annotations](https://spec.modelcontextprotocol.io/specification/2025-03-26/server/tools/#tool-annotations) (`readOnlyHint`, `destructiveHint`, `idempotentHint`) so hosts can show confirmation dialogs before destructive operations.
-
-### `brain_recall`
-Semantic search your codebase memory. Results ranked by a composite score (similarity 45%, scope 20%, recency 10%, confidence 10%, importance 10%, quality 5%) and capped to 250 tokens.
-
-```json
-{
-  "mcpServers": {
-    "local-brain": {
-      "command": "node",
-      "args": ["/absolute/path/to/local-brain-mcp/dist/mcp-server.js"],
-      "env": {}
-    }
-  }
-}
-```
-
----
-
-## What is MCP? (For Beginners)
-
-The **Model Context Protocol (MCP)** is an open standard created by Anthropic that allows AI applications (like Claude or Cursor) to securely interact with local tools and data sources.
-
-```text
-┌─────────────────────────┐
-│   AI Coding Assistant   │
-└───────────┬─────────────┘
-            │ Tool Invocation (JSON-RPC over stdio)
-            ▼
-┌─────────────────────────┐
-│     Local Brain MCP     │
-└───────────┬─────────────┘
-            │ Parameterized SQL
-            ▼
-┌─────────────────────────┐
-│  Embedded SQLite DB     │
-└─────────────────────────┘
-```
-
-Local Brain runs locally as a background process over standard input/output (`stdio`). The AI invokes Local Brain tools whenever it needs to recall past lessons or remember new rules.
-
----
-
-## MCP Tools Reference
+All tools carry complete MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`) for full protocol compliance.
 
 ### 1. `brain_recall`
-Semantically searches codebase memories relevant to the query and optional file scope.
+Semantically search your codebase memory across all agents with multi-factor ranking and strict token capping.
 
-- **Type**: Read-only
-- **When to use**: Before refactoring, fixing bugs, or implementing features to check if relevant lessons or constraints exist.
+- **Annotations**: `readOnly: true`, `idempotent: true`
+- **Formula**: Semantic similarity (45%) + File scope (20%) + Recency decay (10%) + Confidence (10%) + Importance (5%) + Cross-agent validation (5%) + Quality score (5%) × Status multiplier × Contradiction penalty.
 
 **Parameters:**
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `query` | `string` | **Yes** | What to search for (max 1000 characters). |
-| `file_path` | `string` | No | Repo-relative file path to scope the query (e.g. `src/auth/jwt.ts`). |
-| `max_items` | `number` | No | Maximum memories to return (1–20, default: 5). |
+| `query` | `string` | **Yes** | Natural language search query (e.g. `"JWT refresh token rotation"`). |
+| `file_path` | `string` | No | Repo-relative file path to focus search scope (e.g. `"src/auth/jwt.ts"`). |
+| `max_items` | `number` | No | Maximum memories to return (1–10, default: `5`). |
 | `category` | `string` | No | Filter by category: `fix`, `architecture`, `convention`, `bug`, `manual`. |
-
-**Example Input:**
-```json
-{
-  "query": "JWT token expiration bug",
-  "file_path": "src/auth/jwt.ts",
-  "max_items": 3
-}
-```
-
-**Example Output:**
-```markdown
-## Brain Recall: "JWT token expiration bug"
-• [src/auth/jwt.ts @ 8a4f12] (fix): JWT refresh race condition — RS256 cert rotates every 24h. Cache public keys with 1h TTL.
-• [src/auth/session.ts @ c31d04] (bug): Sessions expire silently on Tuesday UTC maintenance window.
-```
+| `min_confidence` | `number` | No | Minimum confidence threshold (`0.0` to `1.0`). |
+| `include_deprecated` | `boolean` | No | Include stale and deprecated memories (default: `false`). |
+| `agent_filter` | `string` | No | Optional: restrict to memories created by a specific agent (e.g. `"cursor"`). |
 
 ---
 
-### `brain_learn`
-Manually store a lesson or team convention with quality assessment. Low-signal content (shell noise, one-liners) is automatically filtered.
+### 2. `brain_learn`
+Store a durable lesson, architecture decision, bug root-cause, or team convention with automatic quality filtering, multi-agent attribution, and contradiction checks.
 
-- **Type**: Write
-- **When to use**: When you or the AI discover a crucial rule, edge case, or convention that is not documented in git commits.
+- **Annotations**: `readOnly: false`, `idempotent: false`
 
 **Parameters:**
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `lesson` | `string` | **Yes** | Actionable lesson or decision (max 10000 characters). |
-| `category` | `string` | No | Category: `fix`, `architecture`, `convention`, `bug`, `manual` (default: `manual`). |
-| `file_path` | `string` | No | Associated file path (e.g. `src/db/connection.ts`). |
-| `importance` | `number` | No | Importance multiplier between 0.5 and 2.0 (default: 1.0). |
-
-**Example Input:**
-```json
-{
-  "lesson": "Always use parameterized prepared statements in better-sqlite3 to prevent injection.",
-  "category": "convention",
-  "file_path": "src/db/queries.ts",
-  "importance": 1.5
-}
-```
+| `lesson` | `string` | **Yes** | Actionable engineering rule or decision. |
+| `category` | `string` | No | `fix`, `architecture`, `convention`, `bug`, `manual` (default: `manual`). |
+| `file_path` | `string` | No | Primary file this lesson applies to. |
+| `files` | `array` | No | Array of related file paths. |
+| `confidence` | `number` | No | Confidence score `0.0` to `1.0` (default: `1.0`). |
+| `importance` | `number` | No | Importance multiplier `0.1` to `2.0` (default: `1.0`). |
+| `importance_level` | `string` | No | `low`, `medium`, `high`, `critical` (auto-inferred if omitted). |
+| `agent` | `string` | No | Creating agent identifier (auto-detected if omitted). |
+| `supersedes_id` | `number` | No | ID of older memory replaced by this lesson. |
 
 ---
 
-### `brain_trace`
-Full chronological history of all memories for a specific file, including superseded and deprecated entries.
+### 3. `brain_validate`
+Confirm that an existing memory was helpful and correct during the current coding session. Increments validation count, records the validating agent, and boosts retrieval confidence.
 
-- **Type**: Read-only
-- **When to use**: When investigating the maintenance history or past regressions of a specific source file.
+- **Annotations**: `readOnly: false`, `idempotent: false`
 
 **Parameters:**
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `file_path` | `string` | **Yes** | Repo-relative file path (e.g. `src/db.ts`). |
-
-**Example Input:**
-```json
-{
-  "file_path": "src/db.ts"
-}
-```
+| `id` | `number` | **Yes** | Memory ID to validate. |
+| `agent` | `string` | No | Validating agent identifier (auto-detected if omitted). |
 
 ---
 
-### `brain_forget`
-Permanently remove or deprecate a specific memory by ID (idempotent).
+### 4. `brain_status`
+Returns brain health, storage diagnostics, multi-agent breakdown, and validation metrics.
 
-```json
-{
-  "id": 42,
-  "hard_delete": false
-}
-```
+- **Annotations**: `readOnly: true`, `idempotent: true`
 
 ---
 
-### `brain_prune`
-Remove stale/deprecated memories in bulk. Optionally triggers a full git-diff invalidation pass.
+### 5. `brain_trace`
+Show complete chronological memory history and agent attribution for a specific file.
 
-- **Type**: Destructive Write
-- **When to use**: After major refactors or codebase rewrites to purge outdated knowledge.
-
-**Parameters:**
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `status` | `string` | No | `stale`, `deprecated`, or `all` (default: `stale`). |
-| `run_invalidation` | `boolean` | No | If true, runs a git invalidation pass first (default: `false`). |
-
-**Example Input:**
-```json
-{
-  "status": "stale",
-  "run_invalidation": true
-}
-```
+- **Annotations**: `readOnly: true`, `idempotent: true`
 
 ---
 
-### `brain_status`
-Returns health diagnostics: memory counts by status, DB size, schema version, oldest/newest entries.
+### 6. `brain_forget`
+Deprecate or permanently purge specific memories by ID, path, or text query.
 
-```json
-{}
-```
+- **Annotations**: `readOnly: false`, `destructive: true`, `idempotent: true`
 
 ---
 
-## CLI Commands
+### 7. `brain_prune`
+Clean up stale or deprecated memories from the brain after major refactors.
+
+- **Annotations**: `readOnly: false`, `destructive: true`
+
+---
+
+## 💻 CLI Commands
 
 ```bash
-local-brain init              # setup wizard — writes MCP config for all detected editors
-local-brain ingest            # scan git history and build the brain DB
-local-brain ingest --since "6 months ago" --verbose
-local-brain status            # show DB memory counts and diagnostics
-local-brain prune --invalidate  # detect + remove stale memories
-local-brain learn "lesson text" --category convention --file src/db/client.ts
-local-brain trace --file src/db/client.ts
-local-brain forget --id 42
+local-brain init                     # Auto-detect AI editors and install MCP configs
+local-brain ingest [--commits 500]   # Ingest repository git history
+local-brain query "<text>"           # Test semantic recall directly in terminal
+local-brain learn "<lesson>"         # Store a manual lesson with optional --agent flag
+local-brain validate <id>            # Validate and reinforce a memory ID
+local-brain memories [--agent <ag>]  # List stored memories with filters
+local-brain trace <filePath>         # Show chronological history for a file
+local-brain status                   # Diagnostics and multi-agent breakdown
+local-brain doctor                   # System and editor configuration checker
+local-brain prune [--status stale]   # Remove stale or deprecated records
+local-brain forget [--id <id>]       # Delete or deprecate memories
 ```
 
 ---
 
-## Real-World Usage Example
+## 👥 Multi-Agent Architecture
 
 ```
-git history
-    ↓
-[git-ingest.ts] — filters WIP/typo/format commits + quality assessment
-    ↓ duplicate?
-[db.ts] — findDuplicateMemory → smart merge (preserves richest summary)
-    ↓
-[embeddings.ts] — pure-JS TF-IDF feature hashing (384-dim, sub-1ms, zero network)
-    ↓
-[db.ts] — stores in .git/brain.db (provenance: author, branch, confidence, importance)
-    ↓ (on file change)
-[invalidation.ts] — marks stale if file changed > 30% (multi-file array support)
-    ↓ (on MCP tool call)
-[recall.ts] — cosine similarity + multi-factor ranking, scoped to package, capped to 250 tokens
-    ↓
-Claude Code / Cursor / Copilot / Windsurf / Zed
+┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
+│  Claude Code │   │    Cursor    │   │  Antigravity │   │   Copilot    │
+└───────┬──────┘   └───────┬──────┘   └───────┬──────┘   └───────┬──────┘
+        │                  │                  │                  │
+        └──────────────────┼──────────────────┼──────────────────┘
+                           ▼
+              ┌─────────────────────────┐
+              │     Local Brain MCP     │
+              │  (stdio / WAL SQLite)   │
+              └────────────┬────────────┘
+                           ▼
+          ┌───────────────────────────────────┐
+          │        Shared Memory DB           │
+          │  • Multi-factor deterministic rank│
+          │  • Cross-agent validation boost   │
+          │  • Contradiction detection & pen. │
+          │  • Project & agent provenance     │
+          └───────────────────────────────────┘
 ```
 
-### Ranking Formula
-
-```
-rank_score = (similarity × 0.45)
-           + (scope_boost × 0.20)
-           + (recency × 0.10)
-           + (confidence × 0.10)
-           + (importance × 0.10)
-           + (quality × 0.05)
-           × status_multiplier   (active=1.0, stale=0.25, deprecated=0.05)
-```
-
-### Memory Lifecycle
-
-```
-inserted (active)
-    → stale   (git-diff invalidation if file changed > 30%)
-    → deprecated  (superseded by newer memory or manual forget)
-    → deleted (hard prune)
-```
+For detailed multi-agent documentation, see [docs/multi-agent.md](docs/multi-agent.md) and [docs/architecture.md](docs/architecture.md).
 
 ---
 
-## Schema & Provenance
-
-Each memory stores:
-
-| Field | Description |
-|---|---|
-| `content` | Raw commit message or lesson text |
-| `summary` | Distilled one-liner (merged on dedup) |
-| `file_path` | Canonical file(s) this memory belongs to |
-| `author` | Git commit author |
-| `branch` | Branch at ingest time |
-| `commit_hash` | SHA of the commit |
-| `confidence` | Float 0–1, updated on merge |
-| `importance` | Float, boosted by quality signals |
-| `status` | `active` / `stale` / `deprecated` |
-| `superseded_by` | FK to the memory that replaced this one |
-| `quality_score` | Float output of quality assessment |
-
----
-
-## Project Structure
-
-```text
-local-brain-mcp/
-├── src/
-│   ├── cli.ts              # Command-line interface and setup wizard
-│   ├── db.ts               # SQLite database management and migrations
-│   ├── embeddings.ts       # Code-aware TF-IDF feature hashing vectorizer
-│   ├── git-ingest.ts       # Commit filtering and git ingestion pipeline
-│   ├── invalidation.ts     # Git-diff staleness detection engine
-│   ├── mcp-server.ts       # MCP server definition and tool handlers
-│   ├── recall.ts           # Multi-factor ranking and token-capped search
-│   ├── schema.sql          # Core SQLite table schemas and triggers
-│   └── scoping.ts          # Monorepo package scope and path sanitization
-├── tests/
-│   ├── mcp-tools.test.js    # MCP protocol and tool integration tests
-│   ├── embeddings.test.js   # Vectorizer and cosine math unit tests
-│   ├── recall-ranking.test.js # Multi-factor ranking algorithm tests
-│   ├── scoping.test.js      # Monorepo scope and path security tests
-│   ├── security.test.js     # SQL injection and path traversal tests
-│   ├── invalidation.test.js # Diff parsing and threshold tests
-│   └── git-ingest.test.js   # Commit filter regex and classifier tests
-├── scripts/
-│   ├── benchmark.mjs        # Performance benchmark runner
-│   ├── copy-schema.mjs      # Build step copying SQL schema to dist
-│   └── evaluate-retrieval.mjs # Information Retrieval evaluation runner
-├── .github/workflows/ci.yml # Multi-version Node.js CI workflow
-├── package.json
-├── tsconfig.json
-└── README.md
-```
-
----
-
-## Troubleshooting
-
-### 1. MCP Server Not Appearing in AI Assistant
-- Run `npx local-brain init` to re-apply editor configurations.
-- Verify that your editor was completely restarted.
-- Check that `node` is available in your system `PATH`.
-
-### 2. No Memories Returned on Recall
-- Ensure git history has been ingested: `npx local-brain ingest`.
-- Check database status: `npx local-brain status`.
-- If working in a subdirectory, check monorepo package scoping.
-
-### 3. Memories Flagged as Stale
-- If a file had substantial changes (>30% lines), its memories are automatically marked `stale`.
-- Run `npx local-brain prune --invalidate` to clean outdated records and re-run `npx local-brain ingest`.
-
----
-
-## Development & Testing
+## 🧪 Testing & Evaluation
 
 ```bash
-# Clone the repository
-git clone https://github.com/cosmiccoder200x-sys/local-brain-mcp.git
-cd local-brain-mcp
-
-# Install dependencies
-npm install
-
-# Type check
-npm run typecheck
-
-# Build TypeScript to dist/
-npm run build
-
-# Run unit and integration tests
-npm test
-
-# Run performance benchmarks
-npm run benchmark
-
-# Run retrieval quality evaluation
-npm run eval
+npm run test         # Run complete test suite (unit, integration, multi-agent, concurrency)
+npm run typecheck    # Validate TypeScript types without emit
+npm run benchmark    # Measure retrieval latency & SQLite WAL throughput
+npm run eval         # Evaluate MRR@5 and Precision@3 against benchmark dataset
 ```
 
 ---
 
-## FAQ
+## 📄 License
 
-**Q: Does Local Brain send code to the cloud?**  
-A: No. Local Brain is 100% offline and makes zero external network requests.
-
-**Q: Do I need an OpenAI or Anthropic API key to run it?**  
-A: No. Local Brain uses a built-in pure-JavaScript feature-hashing embedding engine.
-
-**Q: Where is the memory database saved?**  
-A: In `<your-repo>/.git/brain.db` (or `~/.config/local-brain/brain.db` outside git repos).
-
-**Q: Does it work with monorepos?**  
-A: Yes. Local Brain auto-detects package boundaries (e.g. `packages/auth`, `apps/web`) and scopes recalls accordingly.
-
----
-
-## Tech Stack
-
-- **Protocol:** `@modelcontextprotocol/sdk` (StdioServerTransport)
-- **Storage:** `better-sqlite3` (SQLite WAL mode, BLOB float32 vectors)
-- **Embeddings:** Pure-JS TF-IDF feature hashing (384-dim, sub-1ms, 100% offline)
-- **Git Engine:** `simple-git`
-- **CLI Engine:** `commander`
-
----
-
-## Test Coverage
-
-| Suite | Tests | Status |
-|---|---|---|
-| MCP Tool Annotations | 8 | ✅ pass |
-| Database & Migrations | 4 | ✅ pass |
-| Deduplication & Smart Merge | 4 | ✅ pass |
-| Quality Assessment | 3 | ✅ pass |
-| Memory Supersession | 2 | ✅ pass |
-| MCP Server Lifecycle (integration) | 7 | ✅ pass |
-| Adversarial Retrieval (18 cases A–R) | 18 | ✅ pass |
-
-```bash
-npm test   # runs all suites
-```
-
----
-
-## License
-
-MIT — build freely.
+MIT © cosmiccoder200x-sys

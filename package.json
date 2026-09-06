@@ -1,7 +1,7 @@
 {
   "name": "local-brain-mcp",
-  "version": "1.1.0",
-  "description": "Local-first, zero-latency, git-aware AI memory MCP server for Claude Code, Cursor, Copilot & Windsurf",
+  "version": "1.2.0",
+  "description": "Shared, local-first memory layer for multi-agent software development (Claude Code, Cursor, Antigravity, Copilot & Windsurf)",
   "type": "module",
   "main": "dist/mcp-server.js",
   "types": "dist/mcp-server.d.ts",
@@ -14,18 +14,15 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc && node -e \"import('fs').then(fs => fs.copyFileSync('src/schema.sql', 'dist/schema.sql'))\"",
+    "build": "tsc && node scripts/copy-schema.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/unit/*.test.js tests/integration/*.test.js",
-    "eval": "node scripts/eval.js",
-    "benchmark": "node scripts/benchmark.js",
+    "test": "npm run build && node --test tests/*.test.js tests/unit/*.test.js tests/integration/*.test.js",
+    "benchmark": "npm run build && node scripts/benchmark.mjs",
+    "eval": "npm run build && node scripts/evaluate-retrieval.mjs",
     "start": "node dist/mcp-server.js",
     "init": "node dist/cli.js init",
     "ingest": "node dist/cli.js ingest",
-    "clean": "rimraf dist",
-    "test": "npm run build && node --test tests/*.test.js",
-    "benchmark": "npm run build && node scripts/benchmark.mjs",
-    "eval": "npm run build && node scripts/evaluate-retrieval.mjs"
+    "clean": "rimraf dist"
   },
   "repository": {
     "type": "git",
@@ -48,15 +45,17 @@
     "typescript": "^5.5.0"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=20.0.0"
   },
   "keywords": [
     "mcp",
     "model-context-protocol",
     "ai-memory",
+    "multi-agent",
     "local-first",
     "claude-code",
     "cursor",
+    "antigravity",
     "copilot",
     "windsurf",
     "vector-search",

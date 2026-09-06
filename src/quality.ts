@@ -6,7 +6,7 @@
  * raw debug logs, and trivial noise.
  */
 
-import type { MemoryCategory } from './db.js';
+import type { MemoryCategory, ImportanceLevel } from './db.js';
 
 export interface QualityAssessment {
   isQuality: boolean;
@@ -123,4 +123,40 @@ export function extractReferencedFiles(text: string): string[] {
   }
 
   return Array.from(validFiles);
+}
+
+/**
+ * Infers importance level ('low'|'medium'|'high'|'critical') based on content keywords.
+ */
+export function detectImportanceLevel(content: string): ImportanceLevel {
+  const lower = content.toLowerCase();
+  if (
+    lower.includes('critical') ||
+    lower.includes('vulnerability') ||
+    lower.includes('security') ||
+    lower.includes('data loss') ||
+    lower.includes('breaking change') ||
+    lower.includes('must not') ||
+    lower.includes('never')
+  ) {
+    return 'critical';
+  }
+  if (
+    lower.includes('high') ||
+    lower.includes('architecture') ||
+    lower.includes('convention') ||
+    lower.includes('always') ||
+    lower.includes('important')
+  ) {
+    return 'high';
+  }
+  if (
+    lower.includes('low') ||
+    lower.includes('minor') ||
+    lower.includes('trivial') ||
+    lower.includes('cosmetic')
+  ) {
+    return 'low';
+  }
+  return 'medium';
 }

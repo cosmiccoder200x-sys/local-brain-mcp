@@ -5,7 +5,7 @@
  * stored directly as Float32Array BLOBs for fast zero-dependency local search.
  */
 import Database from 'better-sqlite3';
-import { readFileSync, mkdirSync } from 'fs';
+import { mkdirSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -43,69 +43,90 @@ export function migrateDb(db) {
         { name: 'superseded_by', ddl: 'ALTER TABLE memories ADD COLUMN superseded_by INTEGER REFERENCES memories(id) ON DELETE SET NULL' },
         { name: 'supersedes_id', ddl: 'ALTER TABLE memories ADD COLUMN supersedes_id INTEGER REFERENCES memories(id) ON DELETE SET NULL' },
         { name: 'last_validated', ddl: 'ALTER TABLE memories ADD COLUMN last_validated DATETIME DEFAULT CURRENT_TIMESTAMP' },
+        // Phase 3 — multi-agent provenance
+        { name: 'project_id', ddl: "ALTER TABLE memories ADD COLUMN project_id TEXT" },
+        { name: 'agent', ddl: "ALTER TABLE memories ADD COLUMN agent TEXT NOT NULL DEFAULT 'unknown'" },
+        { name: 'validated_by', ddl: 'ALTER TABLE memories ADD COLUMN validated_by TEXT' },
+        { name: 'validation_count', ddl: 'ALTER TABLE memories ADD COLUMN validation_count INTEGER NOT NULL DEFAULT 0' },
+        { name: 'contradiction_flag', ddl: 'ALTER TABLE memories ADD COLUMN contradiction_flag INTEGER NOT NULL DEFAULT 0' },
+        { name: 'contradiction_ids', ddl: 'ALTER TABLE memories ADD COLUMN contradiction_ids TEXT' },
+        { name: 'importance_level', ddl: "ALTER TABLE memories ADD COLUMN importance_level TEXT NOT NULL DEFAULT 'medium'" },
     ];
     for (const { name, ddl } of migrations) {
         if (!existingColumns.has(name)) {
             try {
                 db.exec(ddl);
             }
-            catch (err) {
+            catch {
                 // column may have already been added concurrently
             }
         }
     }
     // Ensure supplementary indexes exist
-    db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_memories_superseded_by ON memories(superseded_by);
-    CREATE INDEX IF NOT EXISTS idx_memories_branch        ON memories(branch);
-    CREATE INDEX IF NOT EXISTS idx_memories_project       ON memories(project);
-  `);
+    try {
+        db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_memories_status          ON memories(status);
+      CREATE INDEX IF NOT EXISTS idx_memories_file_path       ON memories(file_path);
+      CREATE INDEX IF NOT EXISTS idx_memories_package         ON memories(package_scope);
+      CREATE INDEX IF NOT EXISTS idx_memories_category        ON memories(category);
+      CREATE INDEX IF NOT EXISTS idx_memories_commit          ON memories(commit_hash);
+      CREATE INDEX IF NOT EXISTS idx_memories_superseded_by   ON memories(superseded_by);
+      CREATE INDEX IF NOT EXISTS idx_memories_branch          ON memories(branch);
+      CREATE INDEX IF NOT EXISTS idx_memories_project         ON memories(project);
+      CREATE INDEX IF NOT EXISTS idx_memories_project_id      ON memories(project_id);
+      CREATE INDEX IF NOT EXISTS idx_memories_agent           ON memories(agent);
+      CREATE INDEX IF NOT EXISTS idx_memories_contradiction   ON memories(contradiction_flag);
+    `);
+    }
+    catch {
+        // ignore index creation race
+    }
 }
 export const BASE_SCHEMA_SQL = `
 -- ============================================================
 -- local-brain-mcp: Pure SQLite schema with BLOB vector storage
+-- Phase 3: multi-agent provenance, validation, contradiction
 -- ============================================================
 
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS memories (
-  id             INTEGER PRIMARY KEY AUTOINCREMENT,
-  category       TEXT NOT NULL CHECK(category IN ('fix', 'architecture', 'convention', 'bug', 'manual')),
-  content        TEXT NOT NULL,
-  summary        TEXT NOT NULL,
-  file_path      TEXT,
-  files          TEXT,
-  package_scope  TEXT,
-  commit_hash    TEXT,
-  git_ref        TEXT,
-  author         TEXT,
-  branch         TEXT,
-  project        TEXT,
-  confidence     REAL NOT NULL DEFAULT 1.0,
-  importance     REAL NOT NULL DEFAULT 1.0,
-  quality_score  REAL NOT NULL DEFAULT 1.0,
-  status         TEXT NOT NULL DEFAULT 'active'
-                      CHECK(status IN ('active', 'stale', 'deprecated')),
-  source         TEXT DEFAULT 'git-ingest'
-                      CHECK(source IN ('git-ingest', 'manual', 'session')),
-  superseded_by  INTEGER REFERENCES memories(id) ON DELETE SET NULL,
-  supersedes_id  INTEGER REFERENCES memories(id) ON DELETE SET NULL,
-  last_validated DATETIME DEFAULT CURRENT_TIMESTAMP,
-  token_count    INTEGER DEFAULT 0,
-  embedding      BLOB,
-  created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  category           TEXT NOT NULL CHECK(category IN ('fix', 'architecture', 'convention', 'bug', 'manual')),
+  content            TEXT NOT NULL,
+  summary            TEXT NOT NULL,
+  file_path          TEXT,
+  files              TEXT,
+  package_scope      TEXT,
+  commit_hash        TEXT,
+  git_ref            TEXT,
+  author             TEXT,
+  branch             TEXT,
+  project            TEXT,
+  project_id         TEXT,
+  agent              TEXT NOT NULL DEFAULT 'unknown',
+  validated_by       TEXT,
+  validation_count   INTEGER NOT NULL DEFAULT 0,
+  contradiction_flag INTEGER NOT NULL DEFAULT 0,
+  contradiction_ids  TEXT,
+  importance_level   TEXT NOT NULL DEFAULT 'medium'
+                         CHECK(importance_level IN ('low', 'medium', 'high', 'critical')),
+  confidence         REAL NOT NULL DEFAULT 1.0,
+  importance         REAL NOT NULL DEFAULT 1.0,
+  quality_score      REAL NOT NULL DEFAULT 1.0,
+  status             TEXT NOT NULL DEFAULT 'active'
+                         CHECK(status IN ('active', 'stale', 'deprecated')),
+  source             TEXT DEFAULT 'git-ingest'
+                         CHECK(source IN ('git-ingest', 'manual', 'session')),
+  superseded_by      INTEGER REFERENCES memories(id) ON DELETE SET NULL,
+  supersedes_id      INTEGER REFERENCES memories(id) ON DELETE SET NULL,
+  last_validated     DATETIME DEFAULT CURRENT_TIMESTAMP,
+  token_count        INTEGER DEFAULT 0,
+  embedding          BLOB,
+  created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP
 );
-
-CREATE INDEX IF NOT EXISTS idx_memories_status        ON memories(status);
-CREATE INDEX IF NOT EXISTS idx_memories_file_path     ON memories(file_path);
-CREATE INDEX IF NOT EXISTS idx_memories_package       ON memories(package_scope);
-CREATE INDEX IF NOT EXISTS idx_memories_category      ON memories(category);
-CREATE INDEX IF NOT EXISTS idx_memories_commit        ON memories(commit_hash);
-CREATE INDEX IF NOT EXISTS idx_memories_superseded_by ON memories(superseded_by);
-CREATE INDEX IF NOT EXISTS idx_memories_branch        ON memories(branch);
-CREATE INDEX IF NOT EXISTS idx_memories_project       ON memories(project);
 
 CREATE TRIGGER IF NOT EXISTS memories_updated_at
   AFTER UPDATE ON memories
@@ -129,57 +150,57 @@ CREATE TABLE IF NOT EXISTS ingested_commits (
   memory_count  INTEGER DEFAULT 0
 );
 `;
-// ─── Connection ────────────────────────────────────────────────────────────────
-let _db = null;
-let _currentDbPath = null;
+// ─── Connection Management ────────────────────────────────────────────────────
+let _defaultDb = null;
+const _openDbs = new Set();
 export function getDb(dbPath) {
-    if (_db && !dbPath)
-        return _db;
-    const resolvedPath = dbPath ?? resolveDbPath();
-    if (_db && _currentDbPath === resolvedPath) {
-        return _db;
+    if (!dbPath) {
+        if (_defaultDb && _defaultDb.open)
+            return _defaultDb;
+        const resolvedPath = resolveDbPath();
+        const dir = path.dirname(resolvedPath);
+        mkdirSync(dir, { recursive: true });
+        const db = new Database(resolvedPath);
+        db.exec(BASE_SCHEMA_SQL);
+        migrateDb(db);
+        db.pragma('journal_mode = WAL');
+        db.pragma('synchronous = NORMAL');
+        db.pragma('temp_store = MEMORY');
+        _defaultDb = db;
+        _openDbs.add(db);
+        return db;
     }
-    if (_db && _currentDbPath !== resolvedPath) {
-        try {
-            _db.close();
-        }
-        catch {
-            // Ignore close error on switch
-        }
-        _db = null;
-    }
+    const resolvedPath = path.resolve(dbPath);
     const dir = path.dirname(resolvedPath);
     mkdirSync(dir, { recursive: true });
     const db = new Database(resolvedPath);
-    // Apply base schema safely
-    let schema = BASE_SCHEMA_SQL;
-    try {
-        const fileContent = readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
-        if (fileContent.trim())
-            schema = fileContent;
-    }
-    catch {
-        schema = BASE_SCHEMA_SQL;
-    }
-    db.exec(schema);
-    // Apply migrations for backward compatibility
+    db.exec(BASE_SCHEMA_SQL);
     migrateDb(db);
-    // Pragmas for high-throughput performance
     db.pragma('journal_mode = WAL');
     db.pragma('synchronous = NORMAL');
     db.pragma('temp_store = MEMORY');
-    if (!dbPath) {
-        _db = db;
-    }
+    _openDbs.add(db);
     return db;
 }
-export function closeDb() {
-    if (_db) {
+export function closeDb(targetDb) {
+    if (targetDb) {
         try {
-            _db.close();
+            targetDb.close();
         }
         catch { /* ignore */ }
-        _db = null;
+        _openDbs.delete(targetDb);
+        if (_defaultDb === targetDb)
+            _defaultDb = null;
+    }
+    else {
+        for (const d of _openDbs) {
+            try {
+                d.close();
+            }
+            catch { /* ignore */ }
+        }
+        _openDbs.clear();
+        _defaultDb = null;
     }
 }
 export function insertMemory(db, fields, embedding) {
@@ -192,12 +213,16 @@ export function insertMemory(db, fields, embedding) {
     const stmt = db.prepare(`
     INSERT INTO memories
       (category, content, summary, file_path, files, package_scope,
-       commit_hash, git_ref, author, branch, project,
+       commit_hash, git_ref, author, branch, project, project_id,
+       agent, validated_by, validation_count,
+       contradiction_flag, contradiction_ids, importance_level,
        confidence, importance, quality_score, status, source,
        superseded_by, supersedes_id, last_validated, token_count, embedding)
     VALUES
       (@category, @content, @summary, @file_path, @files, @package_scope,
-       @commit_hash, @git_ref, @author, @branch, @project,
+       @commit_hash, @git_ref, @author, @branch, @project, @project_id,
+       @agent, @validated_by, @validation_count,
+       @contradiction_flag, @contradiction_ids, @importance_level,
        @confidence, @importance, @quality_score, @status, @source,
        @superseded_by, @supersedes_id, @last_validated, @token_count, @embedding)
   `);
@@ -213,6 +238,13 @@ export function insertMemory(db, fields, embedding) {
         author: fields.author ?? null,
         branch: fields.branch ?? null,
         project: fields.project ?? null,
+        project_id: fields.project_id ?? null,
+        agent: fields.agent ?? 'unknown',
+        validated_by: fields.validated_by ?? null,
+        validation_count: fields.validation_count ?? 0,
+        contradiction_flag: fields.contradiction_flag ?? 0,
+        contradiction_ids: fields.contradiction_ids ?? null,
+        importance_level: fields.importance_level ?? 'medium',
         confidence: typeof fields.confidence === 'number' ? Math.max(0, Math.min(1, fields.confidence)) : 1.0,
         importance: typeof fields.importance === 'number' ? Math.max(0.1, Math.min(2.0, fields.importance)) : 1.0,
         quality_score: typeof fields.quality_score === 'number' ? fields.quality_score : 1.0,
@@ -226,7 +258,6 @@ export function insertMemory(db, fields, embedding) {
     };
     const result = stmt.run(params);
     const newId = result.lastInsertRowid;
-    // If this memory supersedes an older one, mark the older memory
     if (fields.supersedes_id) {
         supersedeMemory(db, fields.supersedes_id, newId);
     }
@@ -320,10 +351,6 @@ export function forgetMemory(db, options) {
     }
     return { count: targetIds.length, affectedIds: targetIds };
 }
-/**
- * Searches for exact or near-duplicate memories in the database.
- * Returns the highest matching memory if similarity threshold is met.
- */
 export function findDuplicateMemory(db, embedding, content, filePath, similarityThreshold = 0.88) {
     const cleanedContent = content.trim().toLowerCase();
     // 1. Exact match check
@@ -362,9 +389,6 @@ export function findDuplicateMemory(db, embedding, content, filePath, similarity
     }
     return null;
 }
-/**
- * Merges new knowledge into an existing memory record, preserving the richest context.
- */
 export function mergeMemory(db, existingId, newFields) {
     const existing = getMemoryById(db, existingId);
     if (!existing)
@@ -399,16 +423,23 @@ export function getDbStats(db) {
     const stats = db.prepare(`
     SELECT
       COUNT(*) AS total,
-      SUM(CASE WHEN status = 'active'     THEN 1 ELSE 0 END) AS active,
-      SUM(CASE WHEN status = 'stale'      THEN 1 ELSE 0 END) AS stale,
-      SUM(CASE WHEN status = 'deprecated' THEN 1 ELSE 0 END) AS deprecated,
-      SUM(CASE WHEN source = 'git-ingest' THEN 1 ELSE 0 END) AS from_git,
-      SUM(CASE WHEN source = 'manual'     THEN 1 ELSE 0 END) AS manual,
-      SUM(CASE WHEN superseded_by IS NOT NULL THEN 1 ELSE 0 END) AS superseded
+      SUM(CASE WHEN status = 'active'                 THEN 1 ELSE 0 END) AS active,
+      SUM(CASE WHEN status = 'stale'                  THEN 1 ELSE 0 END) AS stale,
+      SUM(CASE WHEN status = 'deprecated'             THEN 1 ELSE 0 END) AS deprecated,
+      SUM(CASE WHEN source = 'git-ingest'             THEN 1 ELSE 0 END) AS from_git,
+      SUM(CASE WHEN source = 'manual'                 THEN 1 ELSE 0 END) AS manual,
+      SUM(CASE WHEN superseded_by IS NOT NULL         THEN 1 ELSE 0 END) AS superseded,
+      SUM(CASE WHEN validation_count > 0              THEN 1 ELSE 0 END) AS validated,
+      SUM(CASE WHEN contradiction_flag = 1            THEN 1 ELSE 0 END) AS contradicted
     FROM memories
   `).get();
     const commits = db.prepare('SELECT COUNT(*) AS c FROM ingested_commits').get();
     const snapshots = db.prepare('SELECT COUNT(*) AS c FROM file_snapshots').get();
+    const agentRows = db.prepare(`SELECT agent, COUNT(*) AS cnt FROM memories GROUP BY agent`).all();
+    const agent_breakdown = {};
+    for (const row of agentRows) {
+        agent_breakdown[row.agent ?? 'unknown'] = row.cnt;
+    }
     return {
         total: stats.total ?? 0,
         active: stats.active ?? 0,
@@ -419,7 +450,91 @@ export function getDbStats(db) {
         superseded: stats.superseded ?? 0,
         commits_ingested: commits?.c ?? 0,
         file_snapshots: snapshots?.c ?? 0,
+        validated: stats.validated ?? 0,
+        contradicted: stats.contradicted ?? 0,
+        agent_breakdown,
     };
+}
+// ─── Validation ────────────────────────────────────────────────────────────────
+export function validateMemory(db, id, agentId = 'unknown') {
+    const existing = getMemoryById(db, id);
+    if (!existing)
+        return false;
+    const newCount = (existing.validation_count ?? 0) + 1;
+    const newConfidence = Math.min(0.99, (existing.confidence ?? 0.7) + 0.05);
+    db.prepare(`
+    UPDATE memories
+    SET validation_count = ?,
+        validated_by     = ?,
+        confidence       = ?,
+        last_validated   = CURRENT_TIMESTAMP,
+        updated_at       = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(newCount, agentId, newConfidence, id);
+    return true;
+}
+// ─── Contradiction Detection ───────────────────────────────────────────────────
+const CONTRADICTION_PHRASES = [
+    /\bno longer\b/i,
+    /\breplaced (by|with)\b/i,
+    /\bmigrated (to|from)\b/i,
+    /\bdo not use\b/i,
+    /\bdon't use\b/i,
+    /\bswitch(ed)? to\b/i,
+    /\binstead (of|use)\b/i,
+    /\bremoved\b/i,
+    /\bdeprecated\b/i,
+    /\bstopped using\b/i,
+    /\bwe (now|moved|switched)\b/i,
+];
+export function detectContradictions(db, embedding, newContent, projectId) {
+    const hasNegation = CONTRADICTION_PHRASES.some(p => p.test(newContent));
+    if (!hasNegation) {
+        return { contradictedIds: [] };
+    }
+    const query = projectId
+        ? `SELECT * FROM memories WHERE status = 'active' AND (project_id = ? OR project_id IS NULL)`
+        : `SELECT * FROM memories WHERE status = 'active'`;
+    const rows = (projectId
+        ? db.prepare(query).all(projectId)
+        : db.prepare(query).all());
+    const SIMILARITY_THRESHOLD = 0.35;
+    const contradictedIds = [];
+    for (const row of rows) {
+        if (!row.embedding)
+            continue;
+        const memVec = new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.byteLength / Float32Array.BYTES_PER_ELEMENT);
+        const sim = cosineSimilarity(embedding, memVec);
+        if (sim >= SIMILARITY_THRESHOLD) {
+            contradictedIds.push(row.id);
+        }
+    }
+    return { contradictedIds };
+}
+export function markContradiction(db, idA, idB) {
+    const update = (id, otherId) => {
+        const row = getMemoryById(db, id);
+        if (!row)
+            return;
+        let existingIds = [];
+        try {
+            if (row.contradiction_ids)
+                existingIds = JSON.parse(row.contradiction_ids);
+        }
+        catch { /* ignore */ }
+        if (!existingIds.includes(otherId))
+            existingIds.push(otherId);
+        db.prepare(`
+      UPDATE memories
+      SET contradiction_flag = 1, contradiction_ids = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(JSON.stringify(existingIds), id);
+    };
+    update(idA, idB);
+    update(idB, idA);
+}
+export function getMemoriesByAgent(db, agentId) {
+    return db.prepare(`SELECT * FROM memories WHERE agent = ? ORDER BY created_at DESC`).all(agentId);
 }
 // ─── File Snapshots ────────────────────────────────────────────────────────────
 export function upsertFileSnapshot(db, filePath, commitHash, lineCount) {

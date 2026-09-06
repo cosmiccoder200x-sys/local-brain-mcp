@@ -3,17 +3,17 @@
  * cli.ts — `local-brain` setup wizard, diagnostics & CLI runner.
  *
  * Commands:
- *  local-brain init    — auto-detects editors & writes MCP configs
- *  local-brain ingest  — run git ingestion on current repo
- *  local-brain query   — test semantic recall directly from CLI
- *  local-brain learn   — store a manual lesson directly from CLI
- *  local-brain trace   — trace memories for a specific file
- *  local-brain forget  — remove or deprecate specific memories
- *  local-brain doctor  — system diagnostics & configuration checker
- *  local-brain status  — show DB memory statistics
- *  local-brain doctor  — system diagnostics & configuration checker
- *  local-brain prune   — remove stale/deprecated memories
- *  local-brain forget  — delete a specific memory by ID
+ *  local-brain init     — auto-detects editors & writes MCP configs
+ *  local-brain ingest   — run git ingestion on current repo
+ *  local-brain query    — test semantic recall directly from CLI
+ *  local-brain learn    — store a manual lesson directly from CLI
+ *  local-brain validate — validate and reinforce a memory ID
+ *  local-brain memories — list memories with agent/status filters
+ *  local-brain trace    — trace memories for a specific file
+ *  local-brain forget   — remove or deprecate specific memories
+ *  local-brain doctor   — system diagnostics & configuration checker
+ *  local-brain status   — show DB memory statistics and agent breakdown
+ *  local-brain prune    — remove stale/deprecated memories
  */
 
 import { program } from 'commander';
@@ -31,14 +31,17 @@ import {
   insertEmbedding,
   forgetMemory,
   getDbStats,
+  validateMemory,
   type MemoryCategory,
+  type Memory,
 } from './db.js';
 import { embed, estimateTokens } from './embeddings.js';
 import { ingestGitHistory } from './git-ingest.js';
 import { runInvalidationPass } from './invalidation.js';
 import { recallMemories, formatRecallMarkdown, traceFile } from './recall.js';
 import { derivePackageScope } from './scoping.js';
-import { evaluateMemoryQuality } from './quality.js';
+import { evaluateMemoryQuality, detectImportanceLevel } from './quality.js';
+import { detectAgent, normalizeAgentId, getProjectId, type AgentId, type ImportanceLevel } from './provenance.js';
 
 // ─── Editor Config Paths ──────────────────────────────────────────────────────
 
@@ -104,8 +107,8 @@ function writePostCommitHook(repoPath: string) {
 
 program
   .name('local-brain')
-  .description('Local-first, zero-latency AI memory MCP server')
-  .version('1.1.0');
+  .description('Local-first, multi-agent shared memory layer for AI coding agents')
+  .version('1.2.0');
 
 // ── init ──────────────────────────────────────────────────────────────────────
 program
@@ -184,7 +187,7 @@ program
     const repoPath   = path.resolve(opts.repo);
     const maxCommits = parseInt(opts.commits, 10) || 500;
     const since      = opts.since;
-    const verbose    = !!opts.verbose && !opts.quiet;
+    const verbose    = !opts.quiet && Boolean(opts.verbose);
 
     if (!opts.quiet) {
       console.log(`\n🧠 local-brain ingest`);
@@ -215,9 +218,10 @@ program
 program
   .command('query <text>')
   .description('Test semantic memory recall directly from CLI')
-  .option('--repo <path>', 'Repo root', process.cwd())
-  .option('--file <path>', 'File path filter')
-  .option('--max <n>',     'Max results', '5')
+  .option('--repo <path>',   'Repo root', process.cwd())
+  .option('--file <path>',   'File path filter')
+  .option('--max <n>',       'Max results', '5')
+  .option('--agent <name>',  'Filter by agent')
   .action(async (text, opts) => {
     const repoPath = path.resolve(opts.repo as string);
     const db       = getDb(resolveDbPath(repoPath));
@@ -227,6 +231,7 @@ program
       query: text,
       file_path: opts.file,
       max_items: parseInt(opts.max as string, 10),
+      agent_filter: opts.agent,
     });
     const elapsed = (performance.now() - start).toFixed(2);
 
@@ -238,16 +243,20 @@ program
 program
   .command('learn <lesson>')
   .description('Store a durable engineering lesson into Local Brain')
-  .option('--repo <path>',        'Repo root', process.cwd())
-  .option('--category <cat>',     'Category (fix|architecture|convention|bug|manual)', 'manual')
-  .option('--file <path>',        'Associated file path')
-  .option('--confidence <float>', 'Confidence 0.0 to 1.0', '1.0')
-  .option('--importance <float>', 'Importance 0.1 to 2.0', '1.0')
+  .option('--repo <path>',              'Repo root', process.cwd())
+  .option('--category <cat>',           'Category (fix|architecture|convention|bug|manual)', 'manual')
+  .option('--file <path>',              'Associated file path')
+  .option('--agent <name>',             'Agent identity (claude-code, cursor, antigravity, etc.)')
+  .option('--importance-level <level>', 'Importance level (low|medium|high|critical)')
+  .option('--confidence <float>',       'Confidence 0.0 to 1.0', '1.0')
+  .option('--importance <float>',       'Importance 0.1 to 2.0', '1.0')
   .action(async (lesson, opts) => {
     const repoPath = path.resolve(opts.repo as string);
     const db       = getDb(resolveDbPath(repoPath));
     const category = opts.category as MemoryCategory;
     const filePath = opts.file ?? null;
+    const agent: AgentId = opts.agent ? normalizeAgentId(opts.agent) : detectAgent();
+    const importance_level: ImportanceLevel = (opts.importanceLevel as ImportanceLevel) || detectImportanceLevel(lesson);
 
     const quality = evaluateMemoryQuality(lesson, category);
     if (!quality.isQuality) {
@@ -255,25 +264,95 @@ program
       process.exit(1);
     }
 
-    const embedding = await embed(lesson);
+    const embedding = embed(lesson);
     const packageScope = derivePackageScope(filePath);
+    const projectId = getProjectId(repoPath);
 
     const id = insertMemory(db, {
       category,
-      content:       lesson,
-      summary:       lesson.slice(0, 400),
-      file_path:     filePath,
-      package_scope: packageScope,
-      confidence:    parseFloat(opts.confidence),
-      importance:    parseFloat(opts.importance),
-      quality_score: quality.score,
-      status:        'active',
-      source:        'manual',
-      token_count:   estimateTokens(lesson),
+      content:          lesson,
+      summary:          lesson.slice(0, 400),
+      file_path:        filePath,
+      package_scope:    packageScope,
+      project_id:       projectId,
+      agent,
+      importance_level,
+      confidence:       parseFloat(opts.confidence),
+      importance:       parseFloat(opts.importance),
+      quality_score:    quality.score,
+      status:           'active',
+      source:           'manual',
+      token_count:      estimateTokens(lesson),
     }, embedding);
     insertEmbedding(db, id, embedding);
 
-    console.log(`\n✅ Stored memory id #${id} (quality: ${quality.score}, category: ${category})\n`);
+    console.log(`\n✅ Stored memory id #${id} [agent: ${agent}, importance: ${importance_level}, quality: ${quality.score}]\n`);
+  });
+
+// ── validate ──────────────────────────────────────────────────────────────────
+program
+  .command('validate <id>')
+  .description('Validate that a memory was helpful and correct')
+  .option('--repo <path>',  'Repo root', process.cwd())
+  .option('--agent <name>', 'Validating agent identifier', 'cli')
+  .action((idStr, opts) => {
+    const numId = parseInt(idStr, 10);
+    if (isNaN(numId) || numId <= 0) {
+      console.error('\n❌ Please provide a valid positive integer memory ID.\n');
+      process.exit(1);
+    }
+
+    const repoPath = path.resolve(opts.repo as string);
+    const db       = getDb(resolveDbPath(repoPath));
+    const agent    = normalizeAgentId(opts.agent);
+    const success  = validateMemory(db, numId, agent);
+
+    if (success) {
+      console.log(`\n✨ Memory #${numId} validated by '${agent}'. Confidence boosted.\n`);
+    } else {
+      console.error(`\n❌ Memory #${numId} not found.\n`);
+      process.exit(1);
+    }
+  });
+
+// ── memories ──────────────────────────────────────────────────────────────────
+program
+  .command('memories')
+  .description('List stored memories with filtering')
+  .option('--repo <path>',      'Repo root', process.cwd())
+  .option('--agent <name>',     'Filter by agent')
+  .option('--category <cat>',   'Filter by category')
+  .option('--status <status>',  'Filter by status (active|stale|deprecated)', 'active')
+  .option('--limit <n>',        'Max records to display', '20')
+  .action((opts) => {
+    const repoPath = path.resolve(opts.repo as string);
+    const db       = getDb(resolveDbPath(repoPath));
+    const limit    = parseInt(opts.limit as string, 10) || 20;
+
+    const conditions: string[] = ['status = ?'];
+    const params: (string | number)[] = [opts.status];
+
+    if (opts.agent) {
+      conditions.push('agent = ?');
+      params.push(opts.agent);
+    }
+    if (opts.category) {
+      conditions.push('category = ?');
+      params.push(opts.category);
+    }
+
+    params.push(limit);
+    const sql = `SELECT * FROM memories WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC LIMIT ?`;
+    const rows = db.prepare(sql).all(...params) as Memory[];
+
+    console.log(`\n📋 Stored Memories (${rows.length} records):\n`);
+    for (const r of rows) {
+      const file = r.file_path ?? 'general';
+      const val = (r.validation_count ?? 0) > 0 ? ` [val: ${r.validation_count}×]` : '';
+      const cFlag = r.contradiction_flag === 1 ? ' [⚠️ CONTRADICTION]' : '';
+      console.log(`• #${r.id} [${r.agent ?? 'unknown'}] (${r.category}${val}${cFlag} | ${file}): ${r.summary.slice(0, 120)}`);
+    }
+    console.log('');
   });
 
 // ── trace ─────────────────────────────────────────────────────────────────────
@@ -295,8 +374,10 @@ program
     for (const m of memories) {
       const statusTag = m.status !== 'active' ? ` [${m.status.toUpperCase()}]` : '';
       const supersededTag = m.superseded_by ? ` [SUPERSEDED by #${m.superseded_by}]` : '';
+      const agentTag = m.agent && m.agent !== 'unknown' ? ` [agent: ${m.agent}]` : '';
+      const valTag = (m.validation_count ?? 0) > 0 ? ` [validated: ${m.validation_count}×]` : '';
       const commitTag = m.commit_hash ? ` @ ${m.commit_hash.slice(0, 7)}` : '';
-      console.log(`• #${m.id} [${m.category}${statusTag}${supersededTag}${commitTag}]: ${m.summary.slice(0, 180)}`);
+      console.log(`• #${m.id} [${m.category}${statusTag}${supersededTag}${agentTag}${valTag}${commitTag}]: ${m.summary.slice(0, 180)}`);
     }
     console.log('');
   });
@@ -333,6 +414,8 @@ program
     console.log('\n🩺 local-brain doctor\n');
     console.log(`  Node.js version:   ${process.version} (>=18.0.0 required)`);
     console.log(`  Platform:          ${process.platform} (${process.arch})`);
+    console.log(`  Detected Agent:    ${detectAgent()}`);
+    console.log(`  Project ID:        ${getProjectId()}`);
 
     const dbPath = resolveDbPath();
     console.log(`  Default DB path:   ${dbPath}`);
@@ -360,7 +443,7 @@ program
 // ── status ────────────────────────────────────────────────────────────────────
 program
   .command('status')
-  .description('Show brain DB statistics')
+  .description('Show brain DB statistics and agent breakdown')
   .option('--repo <path>', 'Repo root', process.cwd())
   .action(async (opts) => {
     const repoPath = path.resolve(opts.repo as string);
@@ -374,18 +457,26 @@ program
       sizeKb = (statSync(dbFilePath).size / 1024).toFixed(1);
     } catch { /* file may not exist yet */ }
 
-    console.log('\n🧠 local-brain status\n');
+    console.log('\n🧠 local-brain status (v1.2.0)\n');
     console.log(`   Database:         ${dbFilePath}`);
+    console.log(`   Project ID:       ${getProjectId(repoPath)}`);
     console.log(`   Size:             ${sizeKb} KB`);
     console.log(`   Total memories:   ${stats.total}`);
     console.log(`   Active:           ${stats.active}`);
     console.log(`   Stale:            ${stats.stale}`);
     console.log(`   Deprecated:       ${stats.deprecated}`);
     console.log(`   Superseded:       ${stats.superseded}`);
+    console.log(`   Validated:        ${stats.validated}`);
+    console.log(`   Contradictions:   ${stats.contradicted}`);
     console.log(`   From git:         ${stats.from_git}`);
     console.log(`   Manual:           ${stats.manual}`);
     console.log(`   Commits ingested: ${stats.commits_ingested}`);
-    console.log(`   File snapshots:   ${stats.file_snapshots}\n`);
+    console.log(`   File snapshots:   ${stats.file_snapshots}`);
+
+    const agentList = Object.entries(stats.agent_breakdown)
+      .map(([ag, count]) => `     • ${ag}: ${count}`)
+      .join('\n');
+    console.log(`\n   Agent Breakdown:\n${agentList || '     • none'}\n`);
   });
 
 // ── prune ─────────────────────────────────────────────────────────────────────
@@ -410,29 +501,6 @@ program
 
     const removed = pruneByStatus(db, opts.status as 'stale' | 'deprecated' | 'all');
     console.log(`\n🧹 Pruned ${removed} ${opts.status} memories.\n`);
-  });
-
-// ── forget ────────────────────────────────────────────────────────────────────
-program
-  .command('forget <id>')
-  .description('Delete a specific memory by ID')
-  .option('--repo <path>', 'Repo root', process.cwd())
-  .action((id: string, opts: { repo: string }) => {
-    const numId = parseInt(id, 10);
-    if (isNaN(numId) || numId <= 0) {
-      console.error('\n❌ Please provide a valid positive integer memory ID.\n');
-      process.exit(1);
-    }
-
-    const repoPath = path.resolve(opts.repo);
-    const db       = getDb(resolveDbPath(repoPath));
-    const deleted  = forgetMemory(db, { id: numId, hardDelete: true });
-
-    if (deleted) {
-      console.log(`\n🗑️ Memory #${numId} deleted successfully.\n`);
-    } else {
-      console.log(`\n⚠️ Memory #${numId} was not found in the database.\n`);
-    }
   });
 
 program.parse();
