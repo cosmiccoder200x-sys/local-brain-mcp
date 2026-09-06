@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#080B11" />
+      <stop offset="50%" stop-color="#0E131F" />
+      <stop offset="100%" stop-color="#06090E" />
+    </linearGradient>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#A855F7" />
+      <stop offset="50%" stop-color="#3B82F6" />
+      <stop offset="100%" stop-color="#06B6D4" />
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="40%" r="50%">
+      <stop offset="0%" stop-color="#3B82F6" stop-opacity="0.18" />
+      <stop offset="60%" stop-color="#A855F7" stop-opacity="0.06" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1E293B" stroke-width="0.75" stroke-opacity="0.5" />
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)" />
+  <rect width="1200" height="630" fill="url(#grid)" />
+  <rect width="1200" height="630" fill="url(#glow)" />
+
+  <!-- Logo Mark (Centered Above) -->
+  <g transform="translate(540, 110) scale(0.95)">
+    <!-- Left Hemisphere -->
+    <g fill="none" stroke="url(#grad)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 58 18 C 38 18 20 32 20 52 C 20 62 26 70 30 76 C 24 84 26 98 38 106 C 46 111 54 110 58 108" />
+      <path d="M 40 44 L 56 54 L 42 74 L 58 84" stroke-width="3.5" stroke-dasharray="0.5 1" opacity="0.85" />
+      <path d="M 56 34 L 38 58 L 56 70" stroke-width="3.5" opacity="0.75" />
+    </g>
+    <g fill="url(#grad)">
+      <circle cx="58" cy="18" r="4.5" />
+      <circle cx="38" cy="36" r="4" />
+      <circle cx="20" cy="54" r="4" />
+      <circle cx="42" cy="56" r="3.5" />
+      <circle cx="28" cy="78" r="4" />
+      <circle cx="40" cy="94" r="4" />
+      <circle cx="58" cy="108" r="4.5" />
+    </g>
+    <!-- Bridge -->
+    <g stroke="url(#grad)" stroke-width="4" stroke-linecap="round" opacity="0.9">
+      <line x1="58" y1="24" x2="58" y2="40" />
+      <line x1="58" y1="52" x2="58" y2="76" />
+      <line x1="58" y1="88" x2="58" y2="102" />
+    </g>
+    <!-- Right Hemisphere -->
+    <g fill="none" stroke="url(#grad)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 68 18 C 86 18 102 30 106 46" />
+      <path d="M 106 82 C 100 98 84 110 68 110" />
+      <path d="M 72 46 L 94 64 L 72 82" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
+      <line x1="98" y1="82" x2="114" y2="82" stroke-width="7" stroke-linecap="round" />
+    </g>
+    <g fill="url(#grad)">
+      <circle cx="68" cy="18" r="4.5" />
+      <circle cx="106" cy="46" r="4" />
+      <circle cx="106" cy="82" r="4" />
+      <circle cx="68" cy="110" r="4.5" />
+    </g>
+  </g>
+
+  <!-- Title & Typography -->
+  <text x="600" y="310" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="54" font-weight="800" fill="#FFFFFF" letter-spacing="-1.5">
+    Local Brain MCP
+  </text>
+
+  <text x="600" y="370" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="24" font-weight="500" fill="#94A3B8" letter-spacing="-0.2">
+    Shared, local-first memory infrastructure for AI coding agents.
+  </text>
+
+  <!-- Agent Badges Bar -->
+  <g transform="translate(600, 470)">
+    <g transform="translate(-360, 0)">
+      <rect x="-65" y="-20" width="130" height="40" rx="20" fill="#141B2D" stroke="#1E293B" stroke-width="1.5" />
+      <text x="0" y="6" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="14" font-weight="600" fill="#E2E8F0">Claude Code</text>
+    </g>
+    <g transform="translate(-180, 0)">
+      <rect x="-55" y="-20" width="110" height="40" rx="20" fill="#141B2D" stroke="#1E293B" stroke-width="1.5" />
+      <text x="0" y="6" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="14" font-weight="600" fill="#E2E8F0">Cursor</text>
+    </g>
+    <g transform="translate(0, 0)">
+      <rect x="-70" y="-20" width="140" height="40" rx="20" fill="#141B2D" stroke="url(#grad)" stroke-width="1.5" />
+      <text x="0" y="6" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="14" font-weight="600" fill="#06B6D4">Local Brain</text>
+    </g>
+    <g transform="translate(180, 0)">
+      <rect x="-65" y="-20" width="130" height="40" rx="20" fill="#141B2D" stroke="#1E293B" stroke-width="1.5" />
+      <text x="0" y="6" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="14" font-weight="600" fill="#E2E8F0">Antigravity</text>
+    </g>
+    <g transform="translate(360, 0)">
+      <rect x="-55" y="-20" width="110" height="40" rx="20" fill="#141B2D" stroke="#1E293B" stroke-width="1.5" />
+      <text x="0" y="6" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="14" font-weight="600" fill="#E2E8F0">Copilot</text>
+    </g>
+  </g>
+
+  <!-- Bottom Details -->
+  <text x="600" y="560" text-anchor="middle" font-family="monospace" font-size="14" fill="#64748B" letter-spacing="1">
+    100% OFFLINE • EMBEDDED SQLITE • 0 EXTERNAL EGRESS • &lt;5MS LATENCY
+  </text>
+</svg>
