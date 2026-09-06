@@ -1,17 +1,20 @@
 /**
- * git-ingest.ts — Smart commit filter + ingestion pipeline.
+ * git-ingest.ts — Smart commit filter + ingestion pipeline with provenance.
  *
- * Reads git history, filters high-signal commits, generates local
- * embeddings, and stores them in the local SQLite brain DB.
+ * Reads git history, filters high-signal commits, extracts rich provenance,
+ * generates local embeddings, and stores them in the local SQLite brain DB.
  *
  * Solves the "git noise" problem:
  *  ✅ IGNORES: WIP, typo, temp, format, bump version, lint commits
  *  ✅ INCLUDES: fix:/feat:/refactor:, breaking changes (!), PR merges, bug/revert commits
+ *  ✅ EXTRACTS: author, branch, changed files list, confidence & importance ratings
+ *  ✅ DEDUPLICATES: detects duplicate knowledge and merges provenance cleanly
  */
 import simpleGit from 'simple-git';
 import { embed } from './embeddings.js';
-import { insertMemory, isCommitIngested, markCommitIngested, upsertFileSnapshot, } from './db.js';
+import { insertMemory, findDuplicateMemory, mergeMemory, isCommitIngested, markCommitIngested, upsertFileSnapshot, } from './db.js';
 import { derivePackageScope } from './scoping.js';
+import { evaluateMemoryQuality } from './quality.js';
 // ─── Filter Patterns ──────────────────────────────────────────────────────────
 /** Commits matching these patterns are SKIPPED (noise). */
 const IGNORE_PATTERNS = [
@@ -27,6 +30,7 @@ const IGNORE_PATTERNS = [
     /^update\s+(lock|changelog|version)/i,
     /^\[skip ci\]/i,
     /^whitespace/i,
+    /^merge\s+branch\s+'main'/i,
 ];
 /** Commits matching these patterns are INCLUDED (high-signal). */
 const INCLUDE_PATTERNS = [
@@ -44,13 +48,14 @@ const INCLUDE_PATTERNS = [
     /\bbug\b.*\bfix(ed)?\b/i, // Natural language bug fix
     /\bregression\b/i, // Regression fix
     /\bhotfix\b/i, // Hotfix commits
+    /\bsecurity\b/i, // Security fix
 ];
-// ─── Category Inference ───────────────────────────────────────────────────────
+// ─── Category & Confidence Inference ─────────────────────────────────────────
 function inferCategory(message) {
     const m = message.toLowerCase();
     if (/BREAKING CHANGE|!:/i.test(m))
         return 'architecture';
-    if (/^fix|fixes?|bug|regression|hotfix/.test(m))
+    if (/^fix|fixes?|bug|regression|hotfix|security/.test(m))
         return 'fix';
     if (/^feat/.test(m))
         return 'architecture';
@@ -62,9 +67,27 @@ function inferCategory(message) {
         return 'bug';
     return 'convention';
 }
-/**
- * Build a compact plain-English summary of a commit suitable for embedding.
- */
+function inferConfidenceAndImportance(message, category) {
+    let confidence = 0.90;
+    let importance = 1.00;
+    if (/BREAKING CHANGE|!:/i.test(message)) {
+        confidence = 0.98;
+        importance = 1.80;
+    }
+    else if (/fixes?\s+#\d+|resolves?\s+#\d+/i.test(message)) {
+        confidence = 0.95;
+        importance = 1.30;
+    }
+    else if (category === 'fix') {
+        confidence = 0.92;
+        importance = 1.20;
+    }
+    else if (category === 'architecture') {
+        confidence = 0.90;
+        importance = 1.40;
+    }
+    return { confidence, importance };
+}
 function buildCommitSummary(commit) {
     const files = commit.files.slice(0, 5).join(', ');
     const extraFiles = commit.files.length > 5
@@ -91,28 +114,38 @@ export function isHighSignalCommit(message) {
     return false;
 }
 export async function ingestGitHistory(db, options) {
-    const { repoPath, maxCommits = 500, since = '12 months ago', verbose = false } = options;
+    const { repoPath, maxCommits = 500, since = '12 months ago', verbose = false, project, } = options;
     const git = simpleGit(repoPath);
-    const result = { scanned: 0, ingested: 0, skipped: 0, errors: 0 };
-    let currentRef;
+    const result = { scanned: 0, ingested: 0, skipped: 0, merged: 0, errors: 0 };
+    let currentRef = 'main';
     try {
         currentRef = (await git.revparse(['--abbrev-ref', 'HEAD'])).trim();
     }
     catch {
-        console.error('[ingest] Not a git repository or no commits found.');
+        if (verbose)
+            console.error('[ingest] Not a git repository or no commits found.');
         return result;
     }
-    const log = await git.log({
-        maxCount: maxCommits,
-        '--since': since,
-    });
-    const commits = log.all;
+    let commits = [];
+    try {
+        const log = await git.log({
+            maxCount: maxCommits,
+            '--since': since,
+        });
+        commits = log.all;
+    }
+    catch (err) {
+        if (verbose)
+            console.error('[ingest] Failed to read git log:', err);
+        return result;
+    }
     if (verbose)
         console.error(`[ingest] Found ${commits.length} commits to scan.`);
     for (const commit of commits) {
         result.scanned++;
         const hash = commit.hash;
         const message = commit.message;
+        const author = commit.author_name || commit.author_email || 'unknown';
         if (isCommitIngested(db, hash)) {
             result.skipped++;
             continue;
@@ -123,9 +156,17 @@ export async function ingestGitHistory(db, options) {
                 console.error(`[ingest] SKIP  ${hash.slice(0, 7)} — ${message.slice(0, 60)}`);
             continue;
         }
+        const category = inferCategory(message);
+        const quality = evaluateMemoryQuality(message, category);
+        if (!quality.isQuality) {
+            result.skipped++;
+            if (verbose)
+                console.error(`[ingest] LOW QUALITY ${hash.slice(0, 7)} — ${quality.reason}`);
+            continue;
+        }
         try {
             const diff = await git.diff([`${hash}^`, hash]).catch(() => '');
-            const showOut = await git.show(['--stat', '--format=', hash]);
+            const showOut = await git.show(['--stat', '--format=', hash]).catch(() => '');
             const changedFiles = showOut
                 .split('\n')
                 .filter(l => l.includes('|'))
@@ -136,13 +177,32 @@ export async function ingestGitHistory(db, options) {
                 message,
                 diff,
                 files: changedFiles,
-                ref: currentRef,
+                author,
+                branch: currentRef,
             };
             const summary = buildCommitSummary(commitData);
-            const category = inferCategory(message);
             const embedding = embed(summary);
             const primaryFile = changedFiles[0] ?? null;
             const packageScope = derivePackageScope(primaryFile);
+            const { confidence, importance } = inferConfidenceAndImportance(message, category);
+            // Check for duplicate knowledge in DB
+            const dup = findDuplicateMemory(db, embedding, message, primaryFile, 0.90);
+            if (dup) {
+                mergeMemory(db, dup.match.id, {
+                    category,
+                    content: message,
+                    summary: summary.slice(0, 500),
+                    file_path: primaryFile,
+                    files: JSON.stringify(changedFiles),
+                    confidence,
+                    importance,
+                });
+                markCommitIngested(db, hash, 1);
+                result.merged++;
+                if (verbose)
+                    console.error(`[ingest] MERGE ${hash.slice(0, 7)} -> id ${dup.match.id}`);
+                continue;
+            }
             const lineCount = primaryFile
                 ? (await git.show([`${hash}:${primaryFile}`]).catch(() => '')).split('\n').length
                 : 0;
@@ -151,9 +211,16 @@ export async function ingestGitHistory(db, options) {
                 content: message,
                 summary: summary.slice(0, 500),
                 file_path: primaryFile,
+                files: JSON.stringify(changedFiles),
                 package_scope: packageScope,
                 commit_hash: hash,
                 git_ref: currentRef,
+                author,
+                branch: currentRef,
+                project: project ?? null,
+                confidence,
+                importance,
+                quality_score: quality.score,
                 status: 'active',
                 source: 'git-ingest',
                 token_count: Math.ceil(summary.length / 4),
@@ -176,17 +243,22 @@ export async function ingestGitHistory(db, options) {
 }
 export async function ingestSingleCommit(db, repoPath, hash) {
     const git = simpleGit(repoPath);
-    const log = await git.log({ maxCount: 1, from: hash, to: hash });
-    if (!log.all.length)
+    try {
+        const log = await git.log({ maxCount: 1, from: hash, to: hash });
+        if (!log.all.length)
+            return false;
+        const commit = log.all[0];
+        if (!isHighSignalCommit(commit.message))
+            return false;
+        const result = await ingestGitHistory(db, {
+            repoPath,
+            maxCommits: 1,
+            since: '1 day ago',
+        });
+        return result.ingested > 0 || result.merged > 0;
+    }
+    catch {
         return false;
-    const commit = log.all[0];
-    if (!isHighSignalCommit(commit.message))
-        return false;
-    const result = await ingestGitHistory(db, {
-        repoPath,
-        maxCommits: 1,
-        since: '1 day ago',
-    });
-    return result.ingested > 0;
+    }
 }
 //# sourceMappingURL=git-ingest.js.map

@@ -1,11 +1,13 @@
 /**
- * recall.ts — Token-capped semantic recall engine.
+ * recall.ts — Multi-factor deterministic semantic recall and ranking engine.
  *
- * Solves the "token bloat" problem:
- *  ✅ Hard cap of MAX_RESPONSE_TOKENS per recall call
- *  ✅ In-memory cosine similarity search (sub-1ms local)
- *  ✅ Fallback to keyword search if vector matches are below threshold
- *  ✅ Monorepo package scoping applied automatically
+ * Solves token bloat and relevance precision:
+ *  ✅ Multi-factor ranking: semantic similarity (45%), scope precision (20%),
+ *     recency (10%), confidence (10%), importance (10%), quality (5%)
+ *  ✅ Status & Supersession penalties (active: 1.0, stale: 0.25, deprecated: 0.05)
+ *  ✅ Hard token budget cap (MAX_RESPONSE_TOKENS = 250)
+ *  ✅ Monorepo package scoping and file provenance
+ *  ✅ Fast fallback to structured keyword search if vector matches are sparse
  */
 
 import Database from 'better-sqlite3';
@@ -15,30 +17,151 @@ import type { Memory, MemoryCategory } from './db.js';
 
 // ─── Token Budget ─────────────────────────────────────────────────────────────
 
-const MAX_RESPONSE_TOKENS = 250;
+export const MAX_RESPONSE_TOKENS = 250;
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 export interface RecallOptions {
-  query:      string;
-  file_path?: string;
-  max_items?: number;
-  category?:  MemoryCategory;
+  query:               string;
+  file_path?:          string;
+  max_items?:          number;
+  category?:           MemoryCategory;
+  include_deprecated?: boolean;
+  min_confidence?:     number;
 }
 
 export interface RecallResult {
-  memories:    FormattedMemory[];
+  memories:     FormattedMemory[];
   total_tokens: number;
-  truncated:   boolean;
+  truncated:    boolean;
+  query:        string;
 }
 
 export interface FormattedMemory {
-  id:           number;
-  category:     string;
-  summary:      string;
-  file_path:    string | null;
-  commit_hash:  string | null;
-  similarity:   number;
+  id:             number;
+  category:       string;
+  summary:        string;
+  file_path:      string | null;
+  files:          string[];
+  commit_hash:    string | null;
+  author:         string | null;
+  confidence:     number;
+  importance:     number;
+  status:         string;
+  similarity:     number;
+  rank_score:     number;
+  superseded_by:  number | null;
+}
+
+export interface ScoredMemory extends Memory {
+  similarity: number;
+  scopeScore: number;
+  recencyScore: number;
+  rankScore: number;
+}
+
+// ─── Deterministic Multi-Factor Ranking ────────────────────────────────────────
+
+/**
+ * Calculates recency score [0.0 - 1.0] from a timestamp string.
+ */
+function calculateRecencyScore(dateString: string): number {
+  try {
+    const timestamp = new Date(dateString).getTime();
+    const now = Date.now();
+    const ageInDays = Math.max(0, (now - timestamp) / (1000 * 60 * 60 * 24));
+    // Half-life of 90 days for recency decay
+    return Math.exp(-ageInDays / 90);
+  } catch {
+    return 0.5;
+  }
+}
+
+/**
+ * Calculates scope alignment score [0.0 - 1.0] between a target file and memory.
+ */
+function calculateScopeScore(
+  mem: Memory,
+  targetFile?: string,
+  targetPackageScope?: string | null
+): number {
+  if (!targetFile && !targetPackageScope) {
+    return 0.5; // Neutral baseline when no scope filter is requested
+  }
+
+  // Exact file match
+  if (targetFile && mem.file_path === targetFile) {
+    return 1.0;
+  }
+
+  // Associated files array match
+  if (targetFile && mem.files) {
+    try {
+      const files: string[] = JSON.parse(mem.files);
+      if (files.includes(targetFile)) return 0.95;
+    } catch { /* ignore */ }
+  }
+
+  // Same monorepo package scope
+  if (targetPackageScope && mem.package_scope === targetPackageScope) {
+    return 0.75;
+  }
+
+  // Unscoped/general memory applicable everywhere
+  if (!mem.package_scope && !mem.file_path) {
+    return 0.40;
+  }
+
+  // Different package scope
+  return 0.10;
+}
+
+/**
+ * Computes composite deterministic rank score for a candidate memory.
+ */
+export function computeRankScore(
+  mem: Memory,
+  similarity: number,
+  targetFile?: string,
+  targetPackageScope?: string | null
+): ScoredMemory {
+  const scopeScore = calculateScopeScore(mem, targetFile, targetPackageScope);
+  const recencyScore = calculateRecencyScore(mem.updated_at || mem.created_at);
+  const confidenceScore = mem.confidence ?? 1.0;
+  const importanceScore = Math.min(1.0, (mem.importance ?? 1.0) / 2.0);
+  const qualityScore = Math.min(1.0, (mem.quality_score ?? 1.0) / 2.0);
+
+  // Status multiplier
+  let statusMultiplier = 1.0;
+  if (mem.status === 'stale') {
+    statusMultiplier = 0.25;
+  } else if (mem.status === 'deprecated') {
+    statusMultiplier = 0.05;
+  }
+
+  // Superseded penalty
+  if (mem.superseded_by !== null && mem.superseded_by !== undefined) {
+    statusMultiplier = Math.min(statusMultiplier, 0.05);
+  }
+
+  // Weighted composite score (weights sum to 1.0)
+  const rawScore =
+    similarity      * 0.45 +
+    scopeScore      * 0.20 +
+    recencyScore    * 0.10 +
+    confidenceScore * 0.10 +
+    importanceScore * 0.10 +
+    qualityScore    * 0.05;
+
+  const finalRankScore = rawScore * statusMultiplier;
+
+  return {
+    ...mem,
+    similarity,
+    scopeScore,
+    recencyScore,
+    rankScore: Math.round(finalRankScore * 1000) / 1000,
+  };
 }
 
 // ─── Vector Search ────────────────────────────────────────────────────────────
@@ -48,12 +171,14 @@ function vectorSearch(
   queryEmbedding: Float32Array,
   scopeFilter: { sql: string; params: string[] },
   categoryFilter: { sql: string; params: string[] },
-  limit: number
-): Array<Memory & { similarity: number }> {
+  statusFilter: string,
+  targetFile?: string,
+  targetPackageScope?: string | null
+): ScoredMemory[] {
   const sql = `
     SELECT *
     FROM memories
-    WHERE status = 'active'
+    WHERE ${statusFilter}
       ${scopeFilter.sql}
       ${categoryFilter.sql}
   `;
@@ -63,13 +188,12 @@ function vectorSearch(
     ...categoryFilter.params
   ) as Memory[];
 
-  const scored: Array<Memory & { similarity: number }> = [];
+  const scored: ScoredMemory[] = [];
 
   for (const row of rows) {
-    let similarity = 0.5; // fallback neutral score if embedding missing
+    let similarity = 0.5; // fallback neutral score
 
     if (row.embedding && row.embedding.length > 0) {
-      // Reconstruct Float32Array from Buffer
       const buf = row.embedding;
       const memVec = new Float32Array(
         buf.buffer,
@@ -79,13 +203,13 @@ function vectorSearch(
       similarity = cosineSimilarity(queryEmbedding, memVec);
     }
 
-    scored.push({ ...row, similarity });
+    scored.push(computeRankScore(row, similarity, targetFile, targetPackageScope));
   }
 
-  // Sort by similarity descending
-  scored.sort((a, b) => b.similarity - a.similarity);
+  // Sort by composite rank score descending
+  scored.sort((a, b) => b.rankScore - a.rankScore);
 
-  return scored.slice(0, limit);
+  return scored;
 }
 
 // ─── Keyword Fallback ─────────────────────────────────────────────────────────
@@ -95,50 +219,72 @@ function keywordSearch(
   query: string,
   scopeFilter: { sql: string; params: string[] },
   categoryFilter: { sql: string; params: string[] },
-  limit: number
-): Array<Memory & { similarity: number }> {
-  const pattern = `%${query.split(' ').slice(0, 3).join('%')}%`;
+  statusFilter: string,
+  targetFile?: string,
+  targetPackageScope?: string | null
+): ScoredMemory[] {
+  const words = query.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 2);
+  const pattern = `%${words.slice(0, 3).join('%')}%`;
 
   const sql = `
-    SELECT *, 0.5 AS similarity
+    SELECT *
     FROM memories
-    WHERE status = 'active'
+    WHERE ${statusFilter}
       AND (content LIKE ? OR summary LIKE ?)
       ${scopeFilter.sql}
       ${categoryFilter.sql}
     ORDER BY created_at DESC
-    LIMIT ?
+    LIMIT 20
   `;
 
-  return db.prepare(sql).all(
+  const rows = db.prepare(sql).all(
     pattern,
     pattern,
     ...scopeFilter.params,
-    ...categoryFilter.params,
-    limit
-  ) as Array<Memory & { similarity: number }>;
+    ...categoryFilter.params
+  ) as Memory[];
+
+  return rows.map(r => computeRankScore(r, 0.6, targetFile, targetPackageScope))
+    .sort((a, b) => b.rankScore - a.rankScore);
 }
 
 // ─── Token-capped Formatter ───────────────────────────────────────────────────
 
-function formatMemory(mem: Memory & { similarity: number }): {
+function formatMemory(mem: ScoredMemory): {
   formatted: FormattedMemory;
   line: string;
 } {
-  const fileRef = mem.file_path
-    ? `${mem.file_path}${mem.commit_hash ? ` @ ${mem.commit_hash.slice(0, 7)}` : ''}`
-    : 'general';
+  let fileList: string[] = [];
+  try {
+    if (mem.files) fileList = JSON.parse(mem.files);
+  } catch { /* ignore */ }
+  if (mem.file_path && !fileList.includes(mem.file_path)) {
+    fileList.unshift(mem.file_path);
+  }
 
-  const line = `• [${fileRef}] (${mem.category}): ${mem.summary.slice(0, 200)}`;
+  const primaryFile = mem.file_path ?? (fileList[0] ?? 'general');
+  const commitTag = mem.commit_hash ? ` @ ${mem.commit_hash.slice(0, 7)}` : '';
+  const confPercent = Math.round((mem.confidence ?? 1.0) * 100);
+  const statusTag = mem.status !== 'active' ? ` [${mem.status.toUpperCase()}]` : '';
+  const supersededTag = mem.superseded_by ? ' [SUPERSEDED]' : '';
+
+  const line = `• [${primaryFile}${commitTag}] (${mem.category}${statusTag}${supersededTag} | conf: ${confPercent}%): ${mem.summary.slice(0, 200)}`;
 
   return {
     formatted: {
-      id:          mem.id,
-      category:    mem.category,
-      summary:     mem.summary,
-      file_path:   mem.file_path,
-      commit_hash: mem.commit_hash,
-      similarity:  Math.round(mem.similarity * 100) / 100,
+      id:            mem.id,
+      category:      mem.category,
+      summary:       mem.summary,
+      file_path:     mem.file_path,
+      files:         fileList,
+      commit_hash:   mem.commit_hash,
+      author:        mem.author,
+      confidence:    mem.confidence,
+      importance:    mem.importance,
+      status:        mem.status,
+      similarity:    Math.round(mem.similarity * 100) / 100,
+      rank_score:    mem.rankScore,
+      superseded_by: mem.superseded_by,
     },
     line,
   };
@@ -150,7 +296,14 @@ export async function recallMemories(
   db: Database.Database,
   options: RecallOptions
 ): Promise<RecallResult> {
-  const { query, file_path, max_items = 8, category } = options;
+  const {
+    query,
+    file_path,
+    max_items = 5,
+    category,
+    include_deprecated = false,
+    min_confidence = 0.0,
+  } = options;
 
   const packageScope = derivePackageScope(file_path);
   const scopeFilter  = buildScopeFilter(packageScope);
@@ -159,14 +312,38 @@ export async function recallMemories(
     ? { sql: 'AND category = ?', params: [category] }
     : { sql: '', params: [] };
 
+  const statusFilter = include_deprecated
+    ? "status IN ('active', 'stale', 'deprecated')"
+    : "status = 'active'";
+
   const queryEmbedding = embed(query);
 
   let candidates = vectorSearch(
-    db, queryEmbedding, scopeFilter, categoryFilter, max_items
+    db,
+    queryEmbedding,
+    scopeFilter,
+    categoryFilter,
+    statusFilter,
+    file_path,
+    packageScope
   );
 
+  // Filter by min confidence if specified
+  if (min_confidence > 0) {
+    candidates = candidates.filter(c => (c.confidence ?? 1.0) >= min_confidence);
+  }
+
+  // Fallback to keyword search if vector search found nothing
   if (candidates.length === 0) {
-    candidates = keywordSearch(db, query, scopeFilter, categoryFilter, max_items);
+    candidates = keywordSearch(
+      db,
+      query,
+      scopeFilter,
+      categoryFilter,
+      statusFilter,
+      file_path,
+      packageScope
+    );
   }
 
   const memories: FormattedMemory[] = [];
@@ -174,10 +351,12 @@ export async function recallMemories(
   let truncated = false;
 
   for (const mem of candidates) {
+    if (memories.length >= max_items) break;
+
     const { formatted, line } = formatMemory(mem);
     const cost = estimateTokens(line);
 
-    if (totalTokens + cost > MAX_RESPONSE_TOKENS) {
+    if (totalTokens + cost > MAX_RESPONSE_TOKENS && memories.length > 0) {
       truncated = true;
       break;
     }
@@ -186,7 +365,7 @@ export async function recallMemories(
     totalTokens += cost;
   }
 
-  return { memories, total_tokens: totalTokens, truncated };
+  return { memories, total_tokens: totalTokens, truncated, query };
 }
 
 // ─── Formatted Markdown Output ────────────────────────────────────────────────
@@ -197,10 +376,13 @@ export function formatRecallMarkdown(result: RecallResult, query: string): strin
   }
 
   const lines = result.memories.map(m => {
-    const fileRef = m.file_path
-      ? `${m.file_path}${m.commit_hash ? ` @ ${m.commit_hash.slice(0, 7)}` : ''}`
-      : 'general';
-    return `• [${fileRef}] (${m.category}): ${m.summary.slice(0, 200)}`;
+    const primaryFile = m.file_path ?? 'general';
+    const commitTag = m.commit_hash ? ` @ ${m.commit_hash.slice(0, 7)}` : '';
+    const statusTag = m.status !== 'active' ? ` [${m.status.toUpperCase()}]` : '';
+    const supersededTag = m.superseded_by ? ' [SUPERSEDED]' : '';
+    const confTag = m.confidence < 1.0 ? ` | conf: ${Math.round(m.confidence * 100)}%` : '';
+
+    return `• [${primaryFile}${commitTag}] (${m.category}${statusTag}${supersededTag}${confTag}): ${m.summary.slice(0, 200)}`;
   });
 
   const header = `## Brain Recall: "${query}"`;
@@ -219,10 +401,10 @@ export function traceFile(
 ): Memory[] {
   return db.prepare(`
     SELECT * FROM memories
-    WHERE file_path = ?
+    WHERE file_path = ? OR files LIKE ?
     ORDER BY
       CASE status WHEN 'active' THEN 0 WHEN 'stale' THEN 1 ELSE 2 END,
       created_at DESC
-    LIMIT 20
-  `).all(filePath) as Memory[];
+    LIMIT 30
+  `).all(filePath, `%"${filePath}"%`) as Memory[];
 }

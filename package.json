@@ -8,7 +8,11 @@
     "local-brain": "dist/cli.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node -e \"import('fs').then(fs => fs.copyFileSync('src/schema.sql', 'dist/schema.sql'))\"",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/unit/*.test.js tests/integration/*.test.js",
+    "eval": "node scripts/eval.js",
+    "benchmark": "node scripts/benchmark.js",
     "start": "node dist/mcp-server.js",
     "init": "node dist/cli.js init",
     "ingest": "node dist/cli.js ingest",
@@ -16,7 +20,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.5.0",
-    "better-sqlite3": "^9.4.3",
+    "better-sqlite3": "^13.0.3",
     "commander": "^12.1.0",
     "simple-git": "^3.27.0",
     "vectra": "^0.9.0"

@@ -2,8 +2,8 @@
  * invalidation.ts — Stale memory detection and auto-invalidation engine.
  *
  * Binds each memory to a git commit hash. When the associated file is
- * rewritten (>30% line changes) since the memory was recorded, the
- * memory is automatically marked as STALE so it stops appearing in recalls.
+ * rewritten (>30% line changes) or deleted since the memory was recorded,
+ * the memory is automatically marked as STALE so it stops appearing in recalls.
  */
 
 import Database from 'better-sqlite3';
@@ -19,14 +19,14 @@ import {
 // ─── Threshold ────────────────────────────────────────────────────────────────
 
 /** If a file changes more than this fraction since the memory was stored, invalidate. */
-const STALE_CHANGE_THRESHOLD = 0.30; // 30%
+export const STALE_CHANGE_THRESHOLD = 0.30; // 30%
 
 // ─── Line-diff Calculator ─────────────────────────────────────────────────────
 
 /**
  * Count insertions and deletions in a git diff output string.
  */
-function parseDiffStats(diffOutput: string): { added: number; removed: number } {
+export function parseDiffStats(diffOutput: string): { added: number; removed: number } {
   let added = 0;
   let removed = 0;
   for (const line of diffOutput.split('\n')) {
@@ -47,7 +47,7 @@ function parseDiffStats(diffOutput: string): { added: number; removed: number } 
  * @param baseline   the line count of the file at oldHash
  * @returns          true if the file should be considered stale
  */
-async function isFileStale(
+export async function isFileStale(
   git: SimpleGit,
   filePath: string,
   oldHash: string,
@@ -60,18 +60,18 @@ async function isFileStale(
 
     const { added, removed } = parseDiffStats(diff);
     const totalChanges = added + removed;
-    const changeRatio = baseline > 0 ? totalChanges / baseline : 0;
+    const changeRatio = baseline > 0 ? totalChanges / baseline : 1.0;
 
     return changeRatio >= STALE_CHANGE_THRESHOLD;
   } catch {
-    // If git diff fails (e.g. file deleted), treat as stale
+    // If git diff fails (e.g. file deleted or commit gone), treat as stale
     return true;
   }
 }
 
 // ─── Current Line Count ───────────────────────────────────────────────────────
 
-async function getCurrentLineCount(
+export async function getCurrentLineCount(
   git: SimpleGit,
   filePath: string,
   headHash: string
@@ -80,7 +80,7 @@ async function getCurrentLineCount(
     const content = await git.show([`${headHash}:${filePath}`]);
     return content.split('\n').length;
   } catch {
-    return 0; // file deleted
+    return 0; // file deleted or not found
   }
 }
 
@@ -93,12 +93,8 @@ export interface InvalidationResult {
 }
 
 /**
- * Scan all active memories, check their associated file for staleness,
+ * Scan all active memories, check their associated files for staleness,
  * and mark outdated memories as STALE.
- *
- * Call this:
- * - After each `git-ingest` run
- * - Via the `brain_prune` MCP tool on demand
  */
 export async function runInvalidationPass(
   db: Database.Database,
@@ -120,38 +116,54 @@ export async function runInvalidationPass(
 
   // Collect unique file paths with active memories
   const rows = db.prepare(`
-    SELECT DISTINCT file_path, commit_hash
+    SELECT DISTINCT file_path, files, commit_hash
     FROM memories
-    WHERE status = 'active' AND file_path IS NOT NULL AND commit_hash IS NOT NULL
-  `).all() as Array<{ file_path: string; commit_hash: string }>;
+    WHERE status = 'active' AND commit_hash IS NOT NULL
+  `).all() as Array<{ file_path: string | null; files: string | null; commit_hash: string }>;
 
   const checkedPaths = new Set<string>();
 
-  for (const { file_path, commit_hash } of rows) {
-    if (checkedPaths.has(file_path)) continue;
-    checkedPaths.add(file_path);
-    result.checkedFiles++;
-
-    if (commit_hash === headHash) continue; // memory is current
-
-    const snapshot = getFileSnapshot(db, file_path);
-    const baseline  = snapshot?.line_count ?? 0;
-
-    const stale = await isFileStale(git, file_path, commit_hash, headHash, baseline);
-
-    if (stale) {
-      // Mark all active memories for this file as stale
-      const memories = getActiveMemoriesByFile(db, file_path);
-      for (const mem of memories) {
-        markMemoryStale(db, mem.id);
-        result.stalifiedCount++;
-      }
+  for (const row of rows) {
+    const candidateFiles: string[] = [];
+    if (row.file_path) candidateFiles.push(row.file_path);
+    if (row.files) {
+      try {
+        const parsed = JSON.parse(row.files);
+        if (Array.isArray(parsed)) {
+          for (const f of parsed) {
+            if (typeof f === 'string' && !candidateFiles.includes(f)) {
+              candidateFiles.push(f);
+            }
+          }
+        }
+      } catch { /* ignore */ }
     }
 
-    // Update snapshot with current state
-    const lineCount = await getCurrentLineCount(git, file_path, headHash);
-    upsertFileSnapshot(db, file_path, headHash, lineCount);
-    result.updatedSnapshots++;
+    for (const filePath of candidateFiles) {
+      if (checkedPaths.has(filePath)) continue;
+      checkedPaths.add(filePath);
+      result.checkedFiles++;
+
+      if (row.commit_hash === headHash) continue; // memory is current
+
+      const snapshot = getFileSnapshot(db, filePath);
+      const baseline  = snapshot?.line_count ?? 0;
+
+      const stale = await isFileStale(git, filePath, row.commit_hash, headHash, baseline);
+
+      if (stale) {
+        const memories = getActiveMemoriesByFile(db, filePath);
+        for (const mem of memories) {
+          markMemoryStale(db, mem.id);
+          result.stalifiedCount++;
+        }
+      }
+
+      // Update snapshot with current state
+      const lineCount = await getCurrentLineCount(git, filePath, headHash);
+      upsertFileSnapshot(db, filePath, headHash, lineCount);
+      result.updatedSnapshots++;
+    }
   }
 
   return result;
@@ -159,7 +171,6 @@ export async function runInvalidationPass(
 
 /**
  * Invalidate memories for a single file.
- * Used during post-commit hook execution.
  */
 export async function invalidateFile(
   db: Database.Database,

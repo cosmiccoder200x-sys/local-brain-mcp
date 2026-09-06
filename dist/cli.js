@@ -5,6 +5,9 @@
  *  local-brain init    — auto-detects editors & writes MCP configs
  *  local-brain ingest  — run git ingestion on current repo
  *  local-brain query   — test semantic recall directly from CLI
+ *  local-brain learn   — store a manual lesson directly from CLI
+ *  local-brain trace   — trace memories for a specific file
+ *  local-brain forget  — remove or deprecate specific memories
  *  local-brain doctor  — system diagnostics & configuration checker
  *  local-brain status  — show DB memory statistics
  *  local-brain prune   — remove stale/deprecated memories
@@ -14,10 +17,13 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import simpleGit from 'simple-git';
-import { getDb, resolveDbPath, pruneByStatus } from './db.js';
+import { getDb, resolveDbPath, pruneByStatus, insertMemory, insertEmbedding, forgetMemory, getDbStats, } from './db.js';
+import { embed, estimateTokens } from './embeddings.js';
 import { ingestGitHistory } from './git-ingest.js';
 import { runInvalidationPass } from './invalidation.js';
-import { recallMemories, formatRecallMarkdown } from './recall.js';
+import { recallMemories, formatRecallMarkdown, traceFile } from './recall.js';
+import { derivePackageScope } from './scoping.js';
+import { evaluateMemoryQuality } from './quality.js';
 // ─── Editor Config Paths ──────────────────────────────────────────────────────
 const HOME = os.homedir();
 const EDITOR_TARGETS = [
@@ -154,6 +160,7 @@ program
         console.log(`\n✅ Ingest complete:`);
         console.log(`   Scanned:  ${result.scanned}`);
         console.log(`   Ingested: ${result.ingested}`);
+        console.log(`   Merged:   ${result.merged}`);
         console.log(`   Skipped:  ${result.skipped}`);
         console.log(`   Errors:   ${result.errors}\n`);
     }
@@ -164,6 +171,7 @@ program
     .description('Test semantic memory recall directly from CLI')
     .option('--repo <path>', 'Repo root', process.cwd())
     .option('--file <path>', 'File path filter')
+    .option('--max <n>', 'Max results', '5')
     .action(async (text, opts) => {
     const repoPath = path.resolve(opts.repo);
     const db = getDb(resolveDbPath(repoPath));
@@ -171,10 +179,91 @@ program
     const result = await recallMemories(db, {
         query: text,
         file_path: opts.file,
+        max_items: parseInt(opts.max, 10),
     });
     const elapsed = (performance.now() - start).toFixed(2);
     console.log(`\n${formatRecallMarkdown(result, text)}`);
     console.log(`\n⚡ Recall latency: ${elapsed} ms | Tokens: ${result.total_tokens}/250\n`);
+});
+// ── learn ─────────────────────────────────────────────────────────────────────
+program
+    .command('learn <lesson>')
+    .description('Store a durable engineering lesson into Local Brain')
+    .option('--repo <path>', 'Repo root', process.cwd())
+    .option('--category <cat>', 'Category (fix|architecture|convention|bug|manual)', 'manual')
+    .option('--file <path>', 'Associated file path')
+    .option('--confidence <float>', 'Confidence 0.0 to 1.0', '1.0')
+    .option('--importance <float>', 'Importance 0.1 to 2.0', '1.0')
+    .action(async (lesson, opts) => {
+    const repoPath = path.resolve(opts.repo);
+    const db = getDb(resolveDbPath(repoPath));
+    const category = opts.category;
+    const filePath = opts.file ?? null;
+    const quality = evaluateMemoryQuality(lesson, category);
+    if (!quality.isQuality) {
+        console.error(`\n⚠️  Memory rejected: ${quality.reason}`);
+        process.exit(1);
+    }
+    const embedding = await embed(lesson);
+    const packageScope = derivePackageScope(filePath);
+    const id = insertMemory(db, {
+        category,
+        content: lesson,
+        summary: lesson.slice(0, 400),
+        file_path: filePath,
+        package_scope: packageScope,
+        confidence: parseFloat(opts.confidence),
+        importance: parseFloat(opts.importance),
+        quality_score: quality.score,
+        status: 'active',
+        source: 'manual',
+        token_count: estimateTokens(lesson),
+    }, embedding);
+    insertEmbedding(db, id, embedding);
+    console.log(`\n✅ Stored memory id #${id} (quality: ${quality.score}, category: ${category})\n`);
+});
+// ── trace ─────────────────────────────────────────────────────────────────────
+program
+    .command('trace <filePath>')
+    .description('Show full chronological memory history for a file')
+    .option('--repo <path>', 'Repo root', process.cwd())
+    .action((filePath, opts) => {
+    const repoPath = path.resolve(opts.repo);
+    const db = getDb(resolveDbPath(repoPath));
+    const memories = traceFile(db, filePath);
+    if (memories.length === 0) {
+        console.log(`\nNo memories recorded for ${filePath}\n`);
+        return;
+    }
+    console.log(`\n## Memory Trace: ${filePath}\n`);
+    for (const m of memories) {
+        const statusTag = m.status !== 'active' ? ` [${m.status.toUpperCase()}]` : '';
+        const supersededTag = m.superseded_by ? ` [SUPERSEDED by #${m.superseded_by}]` : '';
+        const commitTag = m.commit_hash ? ` @ ${m.commit_hash.slice(0, 7)}` : '';
+        console.log(`• #${m.id} [${m.category}${statusTag}${supersededTag}${commitTag}]: ${m.summary.slice(0, 180)}`);
+    }
+    console.log('');
+});
+// ── forget ────────────────────────────────────────────────────────────────────
+program
+    .command('forget')
+    .description('Remove or deprecate memories')
+    .option('--repo <path>', 'Repo root', process.cwd())
+    .option('--id <n>', 'Specific memory ID')
+    .option('--file <path>', 'File path')
+    .option('--query <text>', 'Text search pattern')
+    .option('--hard', 'Permanently delete instead of marking deprecated')
+    .action((opts) => {
+    const repoPath = path.resolve(opts.repo);
+    const db = getDb(resolveDbPath(repoPath));
+    const id = opts.id ? parseInt(opts.id, 10) : undefined;
+    const res = forgetMemory(db, {
+        id,
+        filePath: opts.file,
+        query: opts.query,
+        hardDelete: Boolean(opts.hard),
+    });
+    console.log(`\n🗑️  ${opts.hard ? 'Deleted' : 'Deprecated'} ${res.count} memory record(s).\n`);
 });
 // ── doctor ────────────────────────────────────────────────────────────────────
 program
@@ -215,25 +304,17 @@ program
     .action((opts) => {
     const repoPath = path.resolve(opts.repo);
     const db = getDb(resolveDbPath(repoPath));
-    const stats = db.prepare(`
-      SELECT
-        COUNT(*) AS total,
-        SUM(CASE WHEN status = 'active'     THEN 1 ELSE 0 END) AS active,
-        SUM(CASE WHEN status = 'stale'      THEN 1 ELSE 0 END) AS stale,
-        SUM(CASE WHEN status = 'deprecated' THEN 1 ELSE 0 END) AS deprecated,
-        SUM(CASE WHEN source  = 'git-ingest' THEN 1 ELSE 0 END) AS from_git,
-        SUM(CASE WHEN source  = 'manual'     THEN 1 ELSE 0 END) AS manual
-      FROM memories
-    `).get();
-    const ingested = db.prepare('SELECT COUNT(*) AS c FROM ingested_commits').get();
+    const stats = getDbStats(db);
     console.log('\n🧠 local-brain status\n');
     console.log(`   Total memories:   ${stats.total}`);
     console.log(`   Active:           ${stats.active}`);
     console.log(`   Stale:            ${stats.stale}`);
     console.log(`   Deprecated:       ${stats.deprecated}`);
+    console.log(`   Superseded:       ${stats.superseded}`);
     console.log(`   From git:         ${stats.from_git}`);
     console.log(`   Manual:           ${stats.manual}`);
-    console.log(`   Commits ingested: ${ingested.c}\n`);
+    console.log(`   Commits ingested: ${stats.commits_ingested}`);
+    console.log(`   File snapshots:   ${stats.file_snapshots}\n`);
 });
 // ── prune ─────────────────────────────────────────────────────────────────────
 program
