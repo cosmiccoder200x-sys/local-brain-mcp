@@ -10,7 +10,7 @@
  *  ✅ EXTRACTS: author, branch, changed files list, confidence & importance ratings
  *  ✅ DEDUPLICATES: detects duplicate knowledge and merges provenance cleanly
  */
-import simpleGit from 'simple-git';
+import { simpleGit } from 'simple-git';
 import { embed } from './embeddings.js';
 import { insertMemory, findDuplicateMemory, mergeMemory, isCommitIngested, markCommitIngested, upsertFileSnapshot, } from './db.js';
 import { derivePackageScope } from './scoping.js';
@@ -97,12 +97,14 @@ function buildCommitSummary(commit) {
     const isBreaking = /BREAKING CHANGE|!:/i.test(commit.message) ? '[BREAKING CHANGE] ' : '';
     return [
         `Commit: ${isBreaking}${commit.message.trim()}`,
-        `Files: ${files}${extraFiles}`,
+        files ? `Files: ${files}${extraFiles}` : '',
         diffSnippet ? `Diff snippet:\n${diffSnippet}` : '',
     ].filter(Boolean).join('\n');
 }
 // ─── Signal Filter ────────────────────────────────────────────────────────────
 export function isHighSignalCommit(message) {
+    if (!message || typeof message !== 'string')
+        return false;
     for (const pattern of IGNORE_PATTERNS) {
         if (pattern.test(message))
             return false;
@@ -169,9 +171,12 @@ export async function ingestGitHistory(db, options) {
             const showOut = await git.show(['--stat', '--format=', hash]).catch(() => '');
             const changedFiles = showOut
                 .split('\n')
-                .filter(l => l.includes('|'))
-                .map(l => l.split('|')[0].trim())
+                .filter((l) => l.includes('|'))
+                .map((l) => l.split('|')[0]?.trim() ?? '')
                 .filter(Boolean);
+            const changedFiles = rawFiles
+                .map(f => sanitizeFilePath(f))
+                .filter((f) => f !== null);
             const commitData = {
                 hash,
                 message,
@@ -224,6 +229,8 @@ export async function ingestGitHistory(db, options) {
                 status: 'active',
                 source: 'git-ingest',
                 token_count: Math.ceil(summary.length / 4),
+                importance,
+                confidence: 1.0,
             }, embedding);
             if (primaryFile) {
                 upsertFileSnapshot(db, primaryFile, hash, lineCount);

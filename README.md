@@ -1,12 +1,16 @@
+[![M8ven Score](https://m8ven.ai/badge/mcp/cosmiccoder200x-sys-local-brain-mcp-1eus5c)](https://m8ven.ai/mcp/cosmiccoder200x-sys-local-brain-mcp-1eus5c)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
+
 # 🧠 local-brain-mcp
 
-> **Local-first, zero-latency, git-aware AI memory for Claude Code, Cursor, Copilot & Windsurf.**
+> **Local-first, Git-aware persistent memory for AI coding assistants.**
 
-No cloud. No API keys. No privacy risk. Sub-5ms recall.
+Local Brain is a lightweight [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that indexes your repository's Git history and manual engineering decisions into an embedded SQLite vector database. It equips AI coding assistants (Claude Code, Cursor, GitHub Copilot, Windsurf, Zed) with long-term codebase memory—100% offline, zero egress, and zero cloud API keys.
 
 ---
 
-## Why local-brain?
+## 📖 Table of Contents
 
 | Problem with cloud AI memory tools | How local-brain solves it |
 |---|---|
@@ -24,22 +28,24 @@ No cloud. No API keys. No privacy risk. Sub-5ms recall.
 ## Quick Start
 
 ```bash
-# 1. Install
-npm install -g local-brain-mcp
+# 1. Navigate to your Git repository
+cd /path/to/your-project
 
-# 2. Init — auto-detects Claude Code, Cursor, Copilot, Windsurf
+# 2. Auto-detect installed AI editors and link MCP configuration
 npx local-brain init
 
-# 3. Ingest your git history
-cd /path/to/your-project
+# 3. Ingest your Git history into the local brain database
 npx local-brain ingest
 
-# 4. Restart your AI editor — the MCP tools are now available
+# 4. Check memory database statistics
+npx local-brain status
+
+# 5. Restart your AI editor (Claude Code, Cursor, Copilot, Windsurf, Zed)
 ```
 
 ---
 
-## MCP Tools
+## Editor / MCP Setup
 
 All tools carry [MCP 1.5 annotations](https://spec.modelcontextprotocol.io/specification/2025-03-26/server/tools/#tool-annotations) (`readOnlyHint`, `destructiveHint`, `idempotentHint`) so hosts can show confirmation dialogs before destructive operations.
 
@@ -48,18 +54,72 @@ Semantic search your codebase memory. Results ranked by a composite score (simil
 
 ```json
 {
-  "query": "JWT auth bug",
-  "file_path": "src/auth/jwt.ts",
-  "max_items": 5,
-  "category": "fix"
+  "mcpServers": {
+    "local-brain": {
+      "command": "node",
+      "args": ["/absolute/path/to/local-brain-mcp/dist/mcp-server.js"],
+      "env": {}
+    }
+  }
 }
 ```
 
-**Example output:**
+---
+
+## What is MCP? (For Beginners)
+
+The **Model Context Protocol (MCP)** is an open standard created by Anthropic that allows AI applications (like Claude or Cursor) to securely interact with local tools and data sources.
+
+```text
+┌─────────────────────────┐
+│   AI Coding Assistant   │
+└───────────┬─────────────┘
+            │ Tool Invocation (JSON-RPC over stdio)
+            ▼
+┌─────────────────────────┐
+│     Local Brain MCP     │
+└───────────┬─────────────┘
+            │ Parameterized SQL
+            ▼
+┌─────────────────────────┐
+│  Embedded SQLite DB     │
+└─────────────────────────┘
 ```
-## Brain Recall: "JWT auth bug"
-• [src/auth/jwt.ts @ 8a4f12] (fix): JWT refresh race condition — RS256 cert rotates every 24h. Never use HS256 in dev.
-• [src/auth/session.ts @ c31d04] (bug): Sessions expire silently on Tuesdays 02:00 UTC — auth service maintenance window.
+
+Local Brain runs locally as a background process over standard input/output (`stdio`). The AI invokes Local Brain tools whenever it needs to recall past lessons or remember new rules.
+
+---
+
+## MCP Tools Reference
+
+### 1. `brain_recall`
+Semantically searches codebase memories relevant to the query and optional file scope.
+
+- **Type**: Read-only
+- **When to use**: Before refactoring, fixing bugs, or implementing features to check if relevant lessons or constraints exist.
+
+**Parameters:**
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `query` | `string` | **Yes** | What to search for (max 1000 characters). |
+| `file_path` | `string` | No | Repo-relative file path to scope the query (e.g. `src/auth/jwt.ts`). |
+| `max_items` | `number` | No | Maximum memories to return (1–20, default: 5). |
+| `category` | `string` | No | Filter by category: `fix`, `architecture`, `convention`, `bug`, `manual`. |
+
+**Example Input:**
+```json
+{
+  "query": "JWT token expiration bug",
+  "file_path": "src/auth/jwt.ts",
+  "max_items": 3
+}
+```
+
+**Example Output:**
+```markdown
+## Brain Recall: "JWT token expiration bug"
+• [src/auth/jwt.ts @ 8a4f12] (fix): JWT refresh race condition — RS256 cert rotates every 24h. Cache public keys with 1h TTL.
+• [src/auth/session.ts @ c31d04] (bug): Sessions expire silently on Tuesday UTC maintenance window.
 ```
 
 ---
@@ -67,11 +127,24 @@ Semantic search your codebase memory. Results ranked by a composite score (simil
 ### `brain_learn`
 Manually store a lesson or team convention with quality assessment. Low-signal content (shell noise, one-liners) is automatically filtered.
 
+- **Type**: Write
+- **When to use**: When you or the AI discover a crucial rule, edge case, or convention that is not documented in git commits.
+
+**Parameters:**
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `lesson` | `string` | **Yes** | Actionable lesson or decision (max 10000 characters). |
+| `category` | `string` | No | Category: `fix`, `architecture`, `convention`, `bug`, `manual` (default: `manual`). |
+| `file_path` | `string` | No | Associated file path (e.g. `src/db/connection.ts`). |
+| `importance` | `number` | No | Importance multiplier between 0.5 and 2.0 (default: 1.0). |
+
+**Example Input:**
 ```json
 {
-  "lesson": "Always seed the test DB before running Playwright tests or auth flows break.",
+  "lesson": "Always use parameterized prepared statements in better-sqlite3 to prevent injection.",
   "category": "convention",
-  "file_path": "tests/setup.ts"
+  "file_path": "src/db/queries.ts",
+  "importance": 1.5
 }
 ```
 
@@ -80,9 +153,18 @@ Manually store a lesson or team convention with quality assessment. Low-signal c
 ### `brain_trace`
 Full chronological history of all memories for a specific file, including superseded and deprecated entries.
 
+- **Type**: Read-only
+- **When to use**: When investigating the maintenance history or past regressions of a specific source file.
+
+**Parameters:**
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_path` | `string` | **Yes** | Repo-relative file path (e.g. `src/db.ts`). |
+
+**Example Input:**
 ```json
 {
-  "file_path": "src/db/client.ts"
+  "file_path": "src/db.ts"
 }
 ```
 
@@ -103,6 +185,16 @@ Permanently remove or deprecate a specific memory by ID (idempotent).
 ### `brain_prune`
 Remove stale/deprecated memories in bulk. Optionally triggers a full git-diff invalidation pass.
 
+- **Type**: Destructive Write
+- **When to use**: After major refactors or codebase rewrites to purge outdated knowledge.
+
+**Parameters:**
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `status` | `string` | No | `stale`, `deprecated`, or `all` (default: `stale`). |
+| `run_invalidation` | `boolean` | No | If true, runs a git invalidation pass first (default: `false`). |
+
+**Example Input:**
 ```json
 {
   "status": "stale",
@@ -136,7 +228,7 @@ local-brain forget --id 42
 
 ---
 
-## How It Works
+## Real-World Usage Example
 
 ```
 git history
@@ -199,15 +291,99 @@ Each memory stores:
 
 ---
 
-## Supported Editors
+## Project Structure
 
-| Editor | Config auto-detected |
-|---|---|
-| Claude Code | `~/.claude.json` |
-| Cursor | `~/.cursor/mcp.json` |
-| Windsurf | `~/.codeium/windsurf/mcp_config.json` |
-| VS Code Copilot | `~/.vscode/mcp.json` |
-| Zed | `~/.config/zed/settings.json` |
+```text
+local-brain-mcp/
+├── src/
+│   ├── cli.ts              # Command-line interface and setup wizard
+│   ├── db.ts               # SQLite database management and migrations
+│   ├── embeddings.ts       # Code-aware TF-IDF feature hashing vectorizer
+│   ├── git-ingest.ts       # Commit filtering and git ingestion pipeline
+│   ├── invalidation.ts     # Git-diff staleness detection engine
+│   ├── mcp-server.ts       # MCP server definition and tool handlers
+│   ├── recall.ts           # Multi-factor ranking and token-capped search
+│   ├── schema.sql          # Core SQLite table schemas and triggers
+│   └── scoping.ts          # Monorepo package scope and path sanitization
+├── tests/
+│   ├── mcp-tools.test.js    # MCP protocol and tool integration tests
+│   ├── embeddings.test.js   # Vectorizer and cosine math unit tests
+│   ├── recall-ranking.test.js # Multi-factor ranking algorithm tests
+│   ├── scoping.test.js      # Monorepo scope and path security tests
+│   ├── security.test.js     # SQL injection and path traversal tests
+│   ├── invalidation.test.js # Diff parsing and threshold tests
+│   └── git-ingest.test.js   # Commit filter regex and classifier tests
+├── scripts/
+│   ├── benchmark.mjs        # Performance benchmark runner
+│   ├── copy-schema.mjs      # Build step copying SQL schema to dist
+│   └── evaluate-retrieval.mjs # Information Retrieval evaluation runner
+├── .github/workflows/ci.yml # Multi-version Node.js CI workflow
+├── package.json
+├── tsconfig.json
+└── README.md
+```
+
+---
+
+## Troubleshooting
+
+### 1. MCP Server Not Appearing in AI Assistant
+- Run `npx local-brain init` to re-apply editor configurations.
+- Verify that your editor was completely restarted.
+- Check that `node` is available in your system `PATH`.
+
+### 2. No Memories Returned on Recall
+- Ensure git history has been ingested: `npx local-brain ingest`.
+- Check database status: `npx local-brain status`.
+- If working in a subdirectory, check monorepo package scoping.
+
+### 3. Memories Flagged as Stale
+- If a file had substantial changes (>30% lines), its memories are automatically marked `stale`.
+- Run `npx local-brain prune --invalidate` to clean outdated records and re-run `npx local-brain ingest`.
+
+---
+
+## Development & Testing
+
+```bash
+# Clone the repository
+git clone https://github.com/cosmiccoder200x-sys/local-brain-mcp.git
+cd local-brain-mcp
+
+# Install dependencies
+npm install
+
+# Type check
+npm run typecheck
+
+# Build TypeScript to dist/
+npm run build
+
+# Run unit and integration tests
+npm test
+
+# Run performance benchmarks
+npm run benchmark
+
+# Run retrieval quality evaluation
+npm run eval
+```
+
+---
+
+## FAQ
+
+**Q: Does Local Brain send code to the cloud?**  
+A: No. Local Brain is 100% offline and makes zero external network requests.
+
+**Q: Do I need an OpenAI or Anthropic API key to run it?**  
+A: No. Local Brain uses a built-in pure-JavaScript feature-hashing embedding engine.
+
+**Q: Where is the memory database saved?**  
+A: In `<your-repo>/.git/brain.db` (or `~/.config/local-brain/brain.db` outside git repos).
+
+**Q: Does it work with monorepos?**  
+A: Yes. Local Brain auto-detects package boundaries (e.g. `packages/auth`, `apps/web`) and scopes recalls accordingly.
 
 ---
 

@@ -6,6 +6,7 @@
  * the memory is automatically marked as STALE so it stops appearing in recalls.
  */
 import { getActiveMemoriesByFile, getFileSnapshot, markMemoryStale, upsertFileSnapshot, } from './db.js';
+import { sanitizeFilePath } from './scoping.js';
 // ─── Threshold ────────────────────────────────────────────────────────────────
 /** If a file changes more than this fraction since the memory was stored, invalidate. */
 export const STALE_CHANGE_THRESHOLD = 0.30; // 30%
@@ -27,17 +28,10 @@ export function parseDiffStats(diffOutput) {
 /**
  * Check whether a specific file has changed beyond the stale threshold
  * between two git commits.
- *
- * @param git        simple-git instance
- * @param filePath   repo-relative file path
- * @param oldHash    the commit when the memory was stored
- * @param newHash    current HEAD (or 'HEAD')
- * @param baseline   the line count of the file at oldHash
- * @returns          true if the file should be considered stale
  */
 export async function isFileStale(git, filePath, oldHash, newHash, baseline) {
     try {
-        const diff = await git.diff([oldHash, newHash, '--', filePath]);
+        const diff = await git.diff([oldHash, newHash, '--', sanitized]);
         if (!diff.trim())
             return false; // no change
         const { added, removed } = parseDiffStats(diff);
@@ -53,7 +47,7 @@ export async function isFileStale(git, filePath, oldHash, newHash, baseline) {
 // ─── Current Line Count ───────────────────────────────────────────────────────
 export async function getCurrentLineCount(git, filePath, headHash) {
     try {
-        const content = await git.show([`${headHash}:${filePath}`]);
+        const content = await git.show([`${headHash}:${sanitized}`]);
         return content.split('\n').length;
     }
     catch {
@@ -131,6 +125,9 @@ export async function runInvalidationPass(db, git) {
  * Invalidate memories for a single file.
  */
 export async function invalidateFile(db, git, filePath) {
+    const sanitized = sanitizeFilePath(filePath);
+    if (!sanitized)
+        return 0;
     let headHash;
     try {
         headHash = (await git.revparse(['HEAD'])).trim();
@@ -138,13 +135,13 @@ export async function invalidateFile(db, git, filePath) {
     catch {
         return 0;
     }
-    const snapshot = getFileSnapshot(db, filePath);
+    const snapshot = getFileSnapshot(db, sanitized);
     if (!snapshot)
         return 0;
-    const stale = await isFileStale(git, filePath, snapshot.commit_hash, headHash, snapshot.line_count);
+    const stale = await isFileStale(git, sanitized, snapshot.commit_hash, headHash, snapshot.line_count);
     if (!stale)
         return 0;
-    const memories = getActiveMemoriesByFile(db, filePath);
+    const memories = getActiveMemoriesByFile(db, sanitized);
     for (const mem of memories) {
         markMemoryStale(db, mem.id);
     }

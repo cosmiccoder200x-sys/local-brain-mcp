@@ -12,10 +12,10 @@
 
 import Database from 'better-sqlite3';
 import { embed, cosineSimilarity, estimateTokens } from './embeddings.js';
-import { buildScopeFilter, derivePackageScope } from './scoping.js';
+import { buildScopeFilter, derivePackageScope, sanitizeFilePath } from './scoping.js';
 import type { Memory, MemoryCategory } from './db.js';
 
-// ─── Token Budget ─────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 export const MAX_RESPONSE_TOKENS = 250;
 
@@ -212,7 +212,7 @@ function vectorSearch(
   return scored;
 }
 
-// ─── Keyword Fallback ─────────────────────────────────────────────────────────
+// ─── Keyword Search Fallback ──────────────────────────────────────────────────
 
 function keywordSearch(
   db: Database.Database,
@@ -248,7 +248,7 @@ function keywordSearch(
     .sort((a, b) => b.rankScore - a.rankScore);
 }
 
-// ─── Token-capped Formatter ───────────────────────────────────────────────────
+// ─── Formatter ────────────────────────────────────────────────────────────────
 
 function formatMemory(mem: ScoredMemory): {
   formatted: FormattedMemory;
@@ -290,7 +290,7 @@ function formatMemory(mem: ScoredMemory): {
   };
 }
 
-// ─── Main Recall Function ─────────────────────────────────────────────────────
+// ─── Main Recall ──────────────────────────────────────────────────────────────
 
 export async function recallMemories(
   db: Database.Database,
@@ -305,8 +305,9 @@ export async function recallMemories(
     min_confidence = 0.0,
   } = options;
 
-  const packageScope = derivePackageScope(file_path);
-  const scopeFilter  = buildScopeFilter(packageScope);
+  const sanitizedPath = sanitizeFilePath(file_path);
+  const packageScope  = derivePackageScope(sanitizedPath);
+  const scopeFilter   = buildScopeFilter(packageScope);
 
   const categoryFilter = category
     ? { sql: 'AND category = ?', params: [category] }
@@ -346,6 +347,9 @@ export async function recallMemories(
     );
   }
 
+  // Filter below minimum score threshold
+  const filtered = candidates.filter(c => c.finalScore >= min_score);
+
   const memories: FormattedMemory[] = [];
   let totalTokens = 0;
   let truncated = false;
@@ -368,7 +372,7 @@ export async function recallMemories(
   return { memories, total_tokens: totalTokens, truncated, query };
 }
 
-// ─── Formatted Markdown Output ────────────────────────────────────────────────
+// ─── Markdown Output ──────────────────────────────────────────────────────────
 
 export function formatRecallMarkdown(result: RecallResult, query: string): string {
   if (result.memories.length === 0) {
@@ -393,12 +397,15 @@ export function formatRecallMarkdown(result: RecallResult, query: string): strin
   return [header, ...lines, footer].filter(Boolean).join('\n');
 }
 
-// ─── File-scoped Trace ────────────────────────────────────────────────────────
+// ─── File Trace ───────────────────────────────────────────────────────────────
 
 export function traceFile(
   db: Database.Database,
   filePath: string
 ): Memory[] {
+  const sanitized = sanitizeFilePath(filePath);
+  if (!sanitized) return [];
+
   return db.prepare(`
     SELECT * FROM memories
     WHERE file_path = ? OR files LIKE ?

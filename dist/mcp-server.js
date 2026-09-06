@@ -204,6 +204,52 @@ export const MCP_TOOLS = [
                     default: false,
                 },
             },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+        },
+        {
+            name: 'brain_status',
+            description: [
+                'Get safe operational telemetry and diagnostics for the local brain.',
+                'Returns total/active/stale memory counts, database size, Git HEAD info, and engine capabilities.',
+            ].join(' '),
+            inputSchema: {
+                type: 'object',
+                properties: {},
+            },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+        },
+        {
+            name: 'brain_forget',
+            description: [
+                'Permanently delete a specific memory entry by its integer ID.',
+                'Use brain_recall or brain_trace to find the ID of the memory you want to forget.',
+            ].join(' '),
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    memory_id: {
+                        type: 'number',
+                        description: 'The positive integer ID of the memory to remove.',
+                    },
+                },
+                required: ['memory_id'],
+            },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
         },
     },
     {
@@ -494,12 +540,12 @@ export function createMcpServer() {
 }
 // ─── Startup ──────────────────────────────────────────────────────────────────
 async function main() {
-    // Warm up embedding model in background (non-blocking)
+    // Non-blocking warmup
     warmupEmbeddings().catch(() => { });
     const server = createMcpServer();
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error('[local-brain-mcp] Server running via stdio. Ready for tool calls.');
+    console.error(`[${SERVER_NAME}] Server v${SERVER_VERSION} running via stdio.`);
 }
 // Only execute main if this file is the entry point
 if (process.argv[1] && (process.argv[1].endsWith('mcp-server.ts') || process.argv[1].endsWith('mcp-server.js'))) {

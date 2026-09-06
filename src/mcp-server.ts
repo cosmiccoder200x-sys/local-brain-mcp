@@ -39,7 +39,24 @@ import { runInvalidationPass } from './invalidation.js';
 import { derivePackageScope } from './scoping.js';
 import { evaluateMemoryQuality, extractReferencedFiles } from './quality.js';
 
-// ─── Init ─────────────────────────────────────────────────────────────────────
+// ─── Server State ─────────────────────────────────────────────────────────────
+
+const SERVER_NAME    = 'local-brain-mcp';
+const SERVER_VERSION = '1.1.0';
+
+const VALID_CATEGORIES: ReadonlySet<string> = new Set([
+  'fix',
+  'architecture',
+  'convention',
+  'bug',
+  'manual',
+]);
+
+const VALID_PRUNE_STATUSES: ReadonlySet<string> = new Set([
+  'stale',
+  'deprecated',
+  'all',
+]);
 
 const db  = getDb();
 const git = simpleGit(process.cwd());
@@ -224,6 +241,52 @@ export const MCP_TOOLS: Tool[] = [
           description: 'If true, permanently deletes records from SQLite. Default is false (marks deprecated).',
           default:     false,
         },
+      },
+      annotations: {
+        readOnlyHint:    false,
+        destructiveHint: true,
+        idempotentHint:  true,
+        openWorldHint:   false,
+      },
+    },
+    {
+      name:        'brain_status',
+      description: [
+        'Get safe operational telemetry and diagnostics for the local brain.',
+        'Returns total/active/stale memory counts, database size, Git HEAD info, and engine capabilities.',
+      ].join(' '),
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+      annotations: {
+        readOnlyHint:    true,
+        destructiveHint: false,
+        idempotentHint:  true,
+        openWorldHint:   false,
+      },
+    },
+    {
+      name:        'brain_forget',
+      description: [
+        'Permanently delete a specific memory entry by its integer ID.',
+        'Use brain_recall or brain_trace to find the ID of the memory you want to forget.',
+      ].join(' '),
+      inputSchema: {
+        type: 'object',
+        properties: {
+          memory_id: {
+            type:        'number',
+            description: 'The positive integer ID of the memory to remove.',
+          },
+        },
+        required: ['memory_id'],
+      },
+      annotations: {
+        readOnlyHint:    false,
+        destructiveHint: true,
+        idempotentHint:  true,
+        openWorldHint:   false,
       },
     },
   },
@@ -554,13 +617,13 @@ export function createMcpServer(): Server {
 // ─── Startup ──────────────────────────────────────────────────────────────────
 
 async function main() {
-  // Warm up embedding model in background (non-blocking)
+  // Non-blocking warmup
   warmupEmbeddings().catch(() => {});
 
   const server = createMcpServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('[local-brain-mcp] Server running via stdio. Ready for tool calls.');
+  console.error(`[${SERVER_NAME}] Server v${SERVER_VERSION} running via stdio.`);
 }
 
 // Only execute main if this file is the entry point

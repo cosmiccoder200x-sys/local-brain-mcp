@@ -5,7 +5,7 @@
  * stored directly as Float32Array BLOBs for fast zero-dependency local search.
  */
 import Database from 'better-sqlite3';
-import { readFileSync, mkdirSync } from 'fs';
+import { readFileSync, mkdirSync, statSync, existsSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -13,6 +13,9 @@ import { cosineSimilarity } from './embeddings.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // ─── DB Path Resolution ────────────────────────────────────────────────────────
 export function resolveDbPath(repoRoot) {
+    if (process.env.LOCAL_BRAIN_DB_PATH) {
+        return path.resolve(process.env.LOCAL_BRAIN_DB_PATH);
+    }
     if (repoRoot) {
         return path.join(repoRoot, '.git', 'brain.db');
     }
@@ -128,10 +131,23 @@ CREATE TABLE IF NOT EXISTS ingested_commits (
 `;
 // ─── Connection ────────────────────────────────────────────────────────────────
 let _db = null;
+let _currentDbPath = null;
 export function getDb(dbPath) {
     if (_db && !dbPath)
         return _db;
     const resolvedPath = dbPath ?? resolveDbPath();
+    if (_db && _currentDbPath === resolvedPath) {
+        return _db;
+    }
+    if (_db && _currentDbPath !== resolvedPath) {
+        try {
+            _db.close();
+        }
+        catch {
+            // Ignore close error on switch
+        }
+        _db = null;
+    }
     const dir = path.dirname(resolvedPath);
     mkdirSync(dir, { recursive: true });
     const db = new Database(resolvedPath);

@@ -1,5 +1,6 @@
+#!/usr/bin/env node
 /**
- * cli.ts — `npx local-brain` setup wizard, diagnostics & CLI runner.
+ * cli.ts — `local-brain` setup wizard, diagnostics & CLI runner.
  *
  * Commands:
  *  local-brain init    — auto-detects editors & writes MCP configs
@@ -10,7 +11,9 @@
  *  local-brain forget  — remove or deprecate specific memories
  *  local-brain doctor  — system diagnostics & configuration checker
  *  local-brain status  — show DB memory statistics
+ *  local-brain doctor  — system diagnostics & configuration checker
  *  local-brain prune   — remove stale/deprecated memories
+ *  local-brain forget  — delete a specific memory by ID
  */
 export {};
 //# sourceMappingURL=cli.d.ts.map

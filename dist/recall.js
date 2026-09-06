@@ -139,7 +139,7 @@ function keywordSearch(db, query, scopeFilter, categoryFilter, statusFilter, tar
     return rows.map(r => computeRankScore(r, 0.6, targetFile, targetPackageScope))
         .sort((a, b) => b.rankScore - a.rankScore);
 }
-// ─── Token-capped Formatter ───────────────────────────────────────────────────
+// ─── Formatter ────────────────────────────────────────────────────────────────
 function formatMemory(mem) {
     let fileList = [];
     try {
@@ -160,7 +160,7 @@ function formatMemory(mem) {
         formatted: {
             id: mem.id,
             category: mem.category,
-            summary: mem.summary,
+            summary,
             file_path: mem.file_path,
             files: fileList,
             commit_hash: mem.commit_hash,
@@ -175,7 +175,7 @@ function formatMemory(mem) {
         line,
     };
 }
-// ─── Main Recall Function ─────────────────────────────────────────────────────
+// ─── Main Recall ──────────────────────────────────────────────────────────────
 export async function recallMemories(db, options) {
     const { query, file_path, max_items = 5, category, include_deprecated = false, min_confidence = 0.0, } = options;
     const packageScope = derivePackageScope(file_path);
@@ -196,6 +196,8 @@ export async function recallMemories(db, options) {
     if (candidates.length === 0) {
         candidates = keywordSearch(db, query, scopeFilter, categoryFilter, statusFilter, file_path, packageScope);
     }
+    // Filter below minimum score threshold
+    const filtered = candidates.filter(c => c.finalScore >= min_score);
     const memories = [];
     let totalTokens = 0;
     let truncated = false;
@@ -213,7 +215,7 @@ export async function recallMemories(db, options) {
     }
     return { memories, total_tokens: totalTokens, truncated, query };
 }
-// ─── Formatted Markdown Output ────────────────────────────────────────────────
+// ─── Markdown Output ──────────────────────────────────────────────────────────
 export function formatRecallMarkdown(result, query) {
     if (result.memories.length === 0) {
         return `No memories found for: "${query}"`;
@@ -232,8 +234,11 @@ export function formatRecallMarkdown(result, query) {
         : '';
     return [header, ...lines, footer].filter(Boolean).join('\n');
 }
-// ─── File-scoped Trace ────────────────────────────────────────────────────────
+// ─── File Trace ───────────────────────────────────────────────────────────────
 export function traceFile(db, filePath) {
+    const sanitized = sanitizeFilePath(filePath);
+    if (!sanitized)
+        return [];
     return db.prepare(`
     SELECT * FROM memories
     WHERE file_path = ? OR files LIKE ?

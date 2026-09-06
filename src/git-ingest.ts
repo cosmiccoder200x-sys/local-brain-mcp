@@ -12,7 +12,7 @@
  */
 
 import Database from 'better-sqlite3';
-import simpleGit, { type DefaultLogFields, type SimpleGit } from 'simple-git';
+import { simpleGit, type DefaultLogFields, type SimpleGit } from 'simple-git';
 import { embed } from './embeddings.js';
 import {
   insertMemory,
@@ -66,7 +66,7 @@ const INCLUDE_PATTERNS: RegExp[] = [
 
 // ─── Category & Confidence Inference ─────────────────────────────────────────
 
-function inferCategory(message: string): MemoryCategory {
+export function inferCategory(message: string): MemoryCategory {
   const m = message.toLowerCase();
   if (/BREAKING CHANGE|!:/i.test(m))                 return 'architecture';
   if (/^fix|fixes?|bug|regression|hotfix|security/.test(m)) return 'fix';
@@ -123,7 +123,7 @@ function buildCommitSummary(commit: CommitData): string {
 
   return [
     `Commit: ${isBreaking}${commit.message.trim()}`,
-    `Files: ${files}${extraFiles}`,
+    files ? `Files: ${files}${extraFiles}` : '',
     diffSnippet ? `Diff snippet:\n${diffSnippet}` : '',
   ].filter(Boolean).join('\n');
 }
@@ -131,6 +131,7 @@ function buildCommitSummary(commit: CommitData): string {
 // ─── Signal Filter ────────────────────────────────────────────────────────────
 
 export function isHighSignalCommit(message: string): boolean {
+  if (!message || typeof message !== 'string') return false;
   for (const pattern of IGNORE_PATTERNS) {
     if (pattern.test(message)) return false;
   }
@@ -228,9 +229,13 @@ export async function ingestGitHistory(
       const showOut = await git.show(['--stat', '--format=', hash]).catch(() => '');
       const changedFiles = showOut
         .split('\n')
-        .filter(l => l.includes('|'))
-        .map(l => l.split('|')[0].trim())
+        .filter((l: string) => l.includes('|'))
+        .map((l: string) => l.split('|')[0]?.trim() ?? '')
         .filter(Boolean);
+
+      const changedFiles = rawFiles
+        .map(f => sanitizeFilePath(f))
+        .filter((f): f is string => f !== null);
 
       const commitData: CommitData = {
         hash,
@@ -265,9 +270,15 @@ export async function ingestGitHistory(
         continue;
       }
 
-      const lineCount = primaryFile
-        ? (await git.show([`${hash}:${primaryFile}`]).catch(() => '')).split('\n').length
-        : 0;
+      let lineCount = 0;
+      if (primaryFile) {
+        try {
+          const content = await git.show([`${hash}:${primaryFile}`]);
+          lineCount = content.split('\n').length;
+        } catch {
+          lineCount = 0;
+        }
+      }
 
       insertMemory(
         db,

@@ -6,7 +6,7 @@
  */
 
 import Database from 'better-sqlite3';
-import { readFileSync, mkdirSync } from 'fs';
+import { readFileSync, mkdirSync, statSync, existsSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -17,6 +17,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // ─── DB Path Resolution ────────────────────────────────────────────────────────
 
 export function resolveDbPath(repoRoot?: string): string {
+  if (process.env.LOCAL_BRAIN_DB_PATH) {
+    return path.resolve(process.env.LOCAL_BRAIN_DB_PATH);
+  }
   if (repoRoot) {
     return path.join(repoRoot, '.git', 'brain.db');
   }
@@ -197,11 +200,26 @@ CREATE TABLE IF NOT EXISTS ingested_commits (
 // ─── Connection ────────────────────────────────────────────────────────────────
 
 let _db: Database.Database | null = null;
+let _currentDbPath: string | null = null;
 
 export function getDb(dbPath?: string): Database.Database {
   if (_db && !dbPath) return _db;
 
   const resolvedPath = dbPath ?? resolveDbPath();
+
+  if (_db && _currentDbPath === resolvedPath) {
+    return _db;
+  }
+
+  if (_db && _currentDbPath !== resolvedPath) {
+    try {
+      _db.close();
+    } catch {
+      // Ignore close error on switch
+    }
+    _db = null;
+  }
+
   const dir = path.dirname(resolvedPath);
   mkdirSync(dir, { recursive: true });
 
