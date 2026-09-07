@@ -24,6 +24,8 @@ function initNeuralCanvas() {
   const ctx = canvas.getContext('2d');
   let width, height;
   let particles = [];
+  let animationId = null;
+  let isVisible = true;
 
   function resize() {
     width = canvas.width = window.innerWidth;
@@ -69,6 +71,10 @@ function initNeuralCanvas() {
   }
 
   function animate() {
+    if (!isVisible) {
+      animationId = requestAnimationFrame(animate);
+      return;
+    }
     ctx.clearRect(0, 0, width, height);
 
     // Draw connections
@@ -96,13 +102,27 @@ function initNeuralCanvas() {
       p.draw();
     });
 
-    requestAnimationFrame(animate);
+    animationId = requestAnimationFrame(animate);
   }
 
   animate();
+
+  // Visibility change pause/resume
+  document.addEventListener('visibilitychange', () => {
+    isVisible = !document.hidden;
+  });
+
+  // Cleanup
+  const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+  reducedMotionQuery.addEventListener('change', (e) => {
+    if (e.matches) {
+      if (animationId) cancelAnimationFrame(animationId);
+      window.removeEventListener('resize', resize);
+    }
+  });
 }
 
-// ─── Code Tab Switcher ────────────────────────────────────────────────────────
+// ─── Code Tab Switcher ────────────────────────────────────────────
 
 function initCodeTabs() {
   const tabBtns = document.querySelectorAll('.code-tab-btn');
@@ -112,19 +132,46 @@ function initCodeTabs() {
     btn.addEventListener('click', () => {
       const targetId = btn.getAttribute('data-tab');
 
-      tabBtns.forEach(b => b.classList.remove('active'));
+      tabBtns.forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-selected', 'false');
+      });
       panels.forEach(p => p.classList.remove('active'));
 
       btn.classList.add('active');
+      btn.setAttribute('aria-selected', 'true');
       const targetPanel = document.getElementById(targetId);
       if (targetPanel) {
         targetPanel.classList.add('active');
       }
     });
+
+    // Keyboard navigation for tabs
+    btn.addEventListener('keydown', (e) => {
+      const btnsArray = Array.from(tabBtns);
+      const idx = btnsArray.indexOf(btn);
+      let newIdx;
+
+      if (e.key === 'ArrowRight') {
+        newIdx = (idx + 1) % btnsArray.length;
+      } else if (e.key === 'ArrowLeft') {
+        newIdx = (idx - 1 + btnsArray.length) % btnsArray.length;
+      } else if (e.key === 'Home') {
+        newIdx = 0;
+      } else if (e.key === 'End') {
+        newIdx = btnsArray.length - 1;
+      } else {
+        return;
+      }
+
+      e.preventDefault();
+      btnsArray[newIdx].focus();
+      btnsArray[newIdx].click();
+    });
   });
 }
 
-// ─── Functional Copy to Clipboard ─────────────────────────────────────────────
+// ─── Functional Copy to Clipboard ─────────────────────────────────
 
 function initCopyButtons() {
   const copyButtons = document.querySelectorAll('[data-copy-target], .btn-copy-tab');
@@ -149,19 +196,43 @@ function initCopyButtons() {
 
       try {
         await navigator.clipboard.writeText(textToCopy);
-        const originalText = btn.innerHTML;
-        btn.innerHTML = `<span style="color: var(--green);">✓ Copied</span>`;
-        setTimeout(() => {
-          btn.innerHTML = originalText;
-        }, 2000);
+        showCopySuccess(btn);
       } catch (err) {
-        console.warn('Clipboard write failed:', err);
+        showCopyFailure(btn);
+      }
+    });
+
+    // Keyboard support
+    btn.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        btn.click();
       }
     });
   });
 }
 
-// ─── Mobile Navigation Toggle ─────────────────────────────────────────────────
+function showCopySuccess(btn) {
+  const originalText = btn.innerHTML;
+  btn.classList.add('copy-success');
+  btn.innerHTML = '<span class="copy-feedback">✓ Copied</span>';
+  setTimeout(() => {
+    btn.classList.remove('copy-success');
+    btn.innerHTML = originalText;
+  }, 2000);
+}
+
+function showCopyFailure(btn) {
+  const originalText = btn.innerHTML;
+  btn.classList.add('copy-failure');
+  btn.innerHTML = '<span class="copy-feedback">✕ Failed</span>';
+  setTimeout(() => {
+    btn.classList.remove('copy-failure');
+    btn.innerHTML = originalText;
+  }, 2000);
+}
+
+// ─── Mobile Navigation Toggle ─────────────────────────────────────
 
 function initMobileNav() {
   const toggleBtn = document.querySelector('.mobile-toggle');
@@ -170,13 +241,15 @@ function initMobileNav() {
   if (!toggleBtn || !mobileNav) return;
 
   toggleBtn.addEventListener('click', () => {
-    mobileNav.classList.toggle('open');
+    const isOpen = mobileNav.classList.toggle('open');
+    toggleBtn.setAttribute('aria-expanded', String(isOpen));
   });
 
   // Close on nav link click
   mobileNav.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', () => {
       mobileNav.classList.remove('open');
+      toggleBtn.setAttribute('aria-expanded', 'false');
     });
   });
 
@@ -184,6 +257,28 @@ function initMobileNav() {
   document.addEventListener('click', (e) => {
     if (!mobileNav.contains(e.target) && !toggleBtn.contains(e.target)) {
       mobileNav.classList.remove('open');
+      toggleBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  // Close on Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && mobileNav.classList.contains('open')) {
+      mobileNav.classList.remove('open');
+      toggleBtn.setAttribute('aria-expanded', 'false');
+      toggleBtn.focus();
+    }
+  });
+
+  // Focus management: focus first link when opened
+  toggleBtn.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggleBtn.click();
+      const firstLink = mobileNav.querySelector('.nav-link');
+      if (firstLink) {
+        setTimeout(() => firstLink.focus(), 50);
+      }
     }
   });
 }

@@ -26,7 +26,6 @@
 
   <!-- Logo Mark (Centered Above) -->
   <g transform="translate(540, 110) scale(0.95)">
-    <!-- Left Hemisphere -->
     <g fill="none" stroke="url(#grad)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M 58 18 C 38 18 20 32 20 52 C 20 62 26 70 30 76 C 24 84 26 98 38 106 C 46 111 54 110 58 108" />
       <path d="M 40 44 L 56 54 L 42 74 L 58 84" stroke-width="3.5" stroke-dasharray="0.5 1" opacity="0.85" />
@@ -41,13 +40,11 @@
       <circle cx="40" cy="94" r="4" />
       <circle cx="58" cy="108" r="4.5" />
     </g>
-    <!-- Bridge -->
     <g stroke="url(#grad)" stroke-width="4" stroke-linecap="round" opacity="0.9">
       <line x1="58" y1="24" x2="58" y2="40" />
       <line x1="58" y1="52" x2="58" y2="76" />
       <line x1="58" y1="88" x2="58" y2="102" />
     </g>
-    <!-- Right Hemisphere -->
     <g fill="none" stroke="url(#grad)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M 68 18 C 86 18 102 30 106 46" />
       <path d="M 106 82 C 100 98 84 110 68 110" />

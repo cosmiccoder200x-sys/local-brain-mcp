@@ -1,11 +1,3 @@
-[![M8ven Score](https://m8ven.ai/badge/mcp/cosmiccoder200x-sys-local-brain-mcp-1eus5c)](https://m8ven.ai/mcp/cosmiccoder200x-sys-local-brain-mcp-1eus5c)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node Version](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen.svg)](https://nodejs.org/)
-
-<p align="center">
-  <img src="assets/logo/local-brain.svg" width="96" height="96" alt="Local Brain MCP Logo" />
-</p>
-
 # Local Brain MCP
 
 > **Shared, local-first memory for AI coding agents.**
@@ -23,24 +15,24 @@ When multiple coding assistants (**Claude Code, Cursor, Antigravity, GitHub Copi
 
 ---
 
-## 🚀 Key Advantages
+## Key Advantages
 
 | Problem with standard AI memory tools | How Local Brain MCP solves it |
 |---|---|
-| 🐌 150–800ms network latency per recall | ⚡ **< 5ms** — local embedded SQLite vector search |
-| ☁️ Source code sent to foreign servers | 🔒 **100% on-device**, zero egress, total privacy |
-| 💸 Context bloat on every session | 📦 **Hard 250-token budget cap** per recall |
-| 🤖 Agent isolation (Claude vs Cursor silos) | 🤝 **Shared multi-agent memory** with provenance |
-| 🗑️ Outdated context from refactored code | 🔄 **Git-diff invalidation** marks old memories STALE |
-| ⚔️ Conflicting or outdated guidelines | ⚠️ **Contradiction detection** + 0.60× ranking penalty |
-| 🌊 WIP/typo commits pollute memory | 🎯 **Quality filter** keeps only high-signal lessons |
-| 🏗️ Monorepo noise across packages | 🎯 **Path-scoped queries**, per-package namespacing |
-| 🔁 Duplicate memories waste tokens | 🧬 **Smart deduplication + merge** on ingest |
-| 🔍 Decisions lost over time | 📜 **Full memory lineage & trace** across agents |
+| 150–800ms network latency per recall | **< 5ms** — local embedded SQLite vector search |
+| Source code sent to foreign servers | **100% on-device**, zero egress, total privacy |
+| Context bloat on every session | **Hard 250-token budget cap** per recall |
+| Agent isolation (Claude vs Cursor silos) | **Shared multi-agent memory** with provenance |
+| Outdated context from refactored code | **Git-diff invalidation** marks old memories STALE |
+| Conflicting or outdated guidelines | **Contradiction detection** + 0.60x ranking penalty |
+| WIP/typo commits pollute memory | **Quality filter** keeps only high-signal lessons |
+| Monorepo noise across packages | **Path-scoped queries**, per-package namespacing |
+| Duplicate memories waste tokens | **Smart deduplication + merge** on ingest |
+| Decisions lost over time | **Full memory lineage & trace** across agents |
 
 ---
 
-## ⚡ Quick Start
+## Quick Start
 
 ```bash
 # 1. Navigate to your Git repository
@@ -90,7 +82,7 @@ Ready for AI memory.
 
 ---
 
-## 🛠️ MCP Tools Reference (7 Tools)
+## MCP Tools Reference (7 Tools)
 
 All tools carry complete MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`) for full protocol compliance.
 
@@ -174,7 +166,7 @@ Clean up stale or deprecated memories from the brain after major refactors.
 
 ---
 
-## 💻 CLI Commands
+## CLI Commands
 
 ```bash
 local-brain init                     # Auto-detect AI editors and install MCP configs
@@ -188,11 +180,12 @@ local-brain status                   # Diagnostics and multi-agent breakdown
 local-brain doctor                   # System and editor configuration checker
 local-brain prune [--status stale]   # Remove stale or deprecated records
 local-brain forget [--id <id>]       # Delete or deprecate memories
+local-brain --no-color               # Disable color output
 ```
 
 ---
 
-## 👥 Multi-Agent Architecture
+## Multi-Agent Architecture
 
 ```
 ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
@@ -201,25 +194,35 @@ local-brain forget [--id <id>]       # Delete or deprecate memories
         │                  │                  │                  │
         └──────────────────┼──────────────────┼──────────────────┘
                            ▼
-              ┌─────────────────────────┐
-              │     Local Brain MCP     │
-              │  (stdio / WAL SQLite)   │
-              └────────────┬────────────┘
+               ┌─────────────────────────┐
+               │     Local Brain MCP     │
+               │  (stdio / WAL SQLite)   │
+               └────────────┬────────────┘
                            ▼
-          ┌───────────────────────────────────┐
-          │        Shared Memory DB           │
-          │  • Multi-factor deterministic rank│
-          │  • Cross-agent validation boost   │
-          │  • Contradiction detection & pen. │
-          │  • Project & agent provenance     │
-          └───────────────────────────────────┘
+           ┌───────────────────────────────────┐
+           │        Shared Memory DB           │
+           │  • Multi-factor deterministic rank│
+           │  • Cross-agent validation boost   │
+           │  • Contradiction detection & pen. │
+           │  • Project & agent provenance     │
+           └───────────────────────────────────┘
 ```
 
 For detailed multi-agent documentation, see [docs/multi-agent.md](docs/multi-agent.md) and [docs/architecture.md](docs/architecture.md).
 
+**Memory is local.** Vercel does not host the local memory database. Each project's memory is scoped to its repository root under `.local-brain/memory.db`.
+
+**Agent identity is provenance.** Agents do not automatically share context unless Local Brain tools (`brain_learn`, `brain_recall`, `brain_validate`) are invoked via MCP.
+
 ---
 
-## 🧪 Testing & Evaluation
+## Node Version Requirements
+
+Local Brain MCP requires Node.js **22.x or 24.x** (matching `better-sqlite3` engine requirements).
+
+---
+
+## Testing & Evaluation
 
 ```bash
 npm run test         # Run complete test suite (unit, integration, multi-agent, concurrency)
@@ -230,6 +233,12 @@ npm run eval         # Evaluate MRR@5 and Precision@3 against benchmark dataset
 
 ---
 
-## 📄 License
+## Contributing
+
+Local Brain MCP is published under the permissive MIT License. Contributions, issue reports, and integrations are welcome.
+
+---
+
+## License
 
 MIT © cosmiccoder200x-sys

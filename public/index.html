@@ -4,21 +4,22 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Local Brain MCP — Shared Memory for AI Coding Agents</title>
-  <meta name="description" content="Shared, local-first memory infrastructure for AI coding agents. Enables Claude Code, Cursor, Antigravity, Copilot, and Windsurf to share project knowledge 100% offline." />
+  <meta name="description" content="Persistent, local-first engineering memory for Claude Code, Cursor, Antigravity, Copilot and other MCP-compatible coding agents." />
   <meta name="keywords" content="mcp, model context protocol, ai memory, multi-agent, local-first, sqlite, claude code, cursor, antigravity, github copilot, windsurf" />
   <meta name="theme-color" content="#06090F" />
+  <link rel="canonical" href="https://local-brain-mcp.vercel.app/" />
 
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://local-brain-mcp.vercel.app/" />
   <meta property="og:title" content="Local Brain MCP — Shared Memory for AI Coding Agents" />
-  <meta property="og:description" content="Shared, local-first memory infrastructure for AI coding agents. 100% offline, embedded SQLite vector search with sub-5ms recall." />
+  <meta property="og:description" content="Persistent, local-first engineering memory for AI coding agents. Share project knowledge across Claude Code, Cursor, Antigravity and other MCP-compatible agents." />
   <meta property="og:image" content="/og-image.svg" />
 
   <!-- Twitter / X -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Local Brain MCP — Shared Memory for AI Coding Agents" />
-  <meta name="twitter:description" content="Shared, local-first memory infrastructure for AI coding agents. 100% offline, embedded SQLite vector search with sub-5ms recall." />
+  <meta name="twitter:description" content="Persistent, local-first engineering memory for AI coding agents. Share project knowledge across Claude Code, Cursor, Antigravity and other MCP-compatible agents." />
   <meta name="twitter:image" content="/og-image.svg" />
 
   <!-- Favicon -->
@@ -35,11 +36,14 @@
 </head>
 <body>
 
+  <!-- Skip Link -->
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
   <!-- Interactive Neural Synapse Background Canvas -->
-  <canvas id="neural-canvas"></canvas>
+  <canvas id="neural-canvas" aria-hidden="true"></canvas>
 
   <!-- ─── Site Navigation ────────────────────────────────────────────────── -->
-  <header class="site-header">
+  <header class="site-header" role="banner">
     <div class="container header-inner">
       <a href="#" class="brand-link" aria-label="Local Brain MCP Home">
         <img src="/logo.svg" alt="Local Brain Logo" class="brand-logo-img" width="32" height="32" />
@@ -47,7 +51,7 @@
       </a>
 
       <nav aria-label="Primary Navigation">
-        <ul class="nav-links">
+        <ul class="nav-links" role="list">
           <li><a href="#how-it-works" class="nav-link">How it works</a></li>
           <li><a href="#features" class="nav-link">Features</a></li>
           <li><a href="#agents" class="nav-link">Agents</a></li>
@@ -58,14 +62,14 @@
 
       <div class="nav-actions">
         <a href="https://github.com/cosmiccoder200x-sys/local-brain-mcp" target="_blank" rel="noopener noreferrer" class="btn-github" aria-label="GitHub Repository">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
           </svg>
           <span>GitHub</span>
         </a>
 
-        <button class="mobile-toggle" aria-label="Toggle navigation menu">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button class="mobile-toggle" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="mobile-nav">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <line x1="3" y1="12" x2="21" y2="12"></line>
             <line x1="3" y1="6" x2="21" y2="6"></line>
             <line x1="3" y1="18" x2="21" y2="18"></line>
@@ -75,7 +79,7 @@
     </div>
 
     <!-- Mobile Navigation Drawer -->
-    <div class="mobile-nav" aria-label="Mobile Navigation">
+    <div class="mobile-nav" id="mobile-nav" aria-label="Mobile Navigation" role="navigation">
       <a href="#how-it-works" class="nav-link">How it works</a>
       <a href="#features" class="nav-link">Features</a>
       <a href="#agents" class="nav-link">Agents</a>
@@ -85,35 +89,36 @@
     </div>
   </header>
 
-  <!-- ─── Hero Section ──────────────────────────────────────────────────── -->
-  <main>
-    <section class="hero-section">
+  <!-- ─── Main Content ──────────────────────────────────────────────────── -->
+  <main id="main-content">
+    <!-- ─── Hero Section ────────────────────────────────────────────────── -->
+    <section class="hero-section" aria-labelledby="hero-heading">
       <div class="container">
         <div class="hero-badge-wrap">
           <span class="badge">
-            <span class="badge-dot"></span>
-            Model Context Protocol • 100% Local-First Memory
+            <span class="badge-dot" aria-hidden="true"></span>
+            SHARED MEMORY FOR AI CODING AGENTS
           </span>
         </div>
 
-        <h1 class="hero-title">
+        <h1 class="hero-title" id="hero-heading">
           Your coding agents<br />
           <span class="gradient-line">share one brain.</span>
         </h1>
 
         <p class="hero-subtitle">
-          Local Brain MCP gives AI coding agents a shared, local-first memory layer for persistent project knowledge.
+          Persistent, local-first engineering memory for Claude Code, Cursor, Antigravity, Copilot and other MCP-compatible coding agents.
         </p>
 
         <div class="hero-cta-group">
           <a href="#install" class="btn btn-primary">
             <span>Get Started</span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
               <path d="M5 12h14M12 5l7 7-7 7"/>
             </svg>
           </a>
           <a href="https://github.com/cosmiccoder200x-sys/local-brain-mcp" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
             </svg>
             <span>View on GitHub</span>
@@ -121,27 +126,27 @@
         </div>
 
         <!-- Terminal Panel matching CLI identity -->
-        <div class="terminal-window">
+        <div class="terminal-window" role="region" aria-label="Terminal demo">
           <div class="terminal-topbar">
-            <div class="terminal-dots">
+            <div class="terminal-dots" aria-hidden="true">
               <span class="terminal-dot dot-red"></span>
               <span class="terminal-dot dot-yellow"></span>
               <span class="terminal-dot dot-green"></span>
             </div>
             <div class="terminal-title">
-              <img src="/logo.svg" width="14" height="14" alt="logo icon" />
+              <img src="/logo.svg" width="14" height="14" alt="" />
               <span>local-brain — bash</span>
             </div>
             <div></div>
           </div>
           <div class="terminal-body">
             <p><span class="term-prompt">$</span> <span class="term-cmd">local-brain init</span></p>
-            <div class="term-ascii">
-   ╭──────╮
- ╭─╯ ╷  ╷ ╰─╮
- │ ●─┼──┼─ >_
- ╰─╮ ╵  ╵ ╭─╯
-   ╰──────╯
+            <div class="term-ascii" aria-hidden="true">
+    ╭──────╮
+  ╭─╯ ╷  ╷ ╰─╮
+  │ ●─┼──┼─ >_
+  ╰─╮ ╵  ╵ ╭─╯
+    ╰──────╯
             </div>
             <p class="term-success">✓ Local Brain initialized successfully</p>
             <br />
@@ -154,12 +159,12 @@
             <p><span class="term-label">LESSONS      </span> <span class="term-val">87</span></p>
             <p><span class="term-label">AGENTS       </span> <span class="term-val">4 active</span></p>
             <br />
-            <p><span class="term-val">Ready for AI memory.</span> <span class="term-cursor"></span></p>
+            <p><span class="term-val">Ready for AI memory.</span> <span class="term-cursor" aria-hidden="true"></span></p>
           </div>
         </div>
 
         <!-- Metric Strips -->
-        <div class="hero-stats">
+        <div class="hero-stats" role="group" aria-label="Key metrics">
           <div class="stat-card">
             <div class="stat-value">&lt; 5 ms</div>
             <div class="stat-label">Recall Latency</div>
@@ -179,38 +184,91 @@
       </div>
     </section>
 
-    <!-- ─── Shared Memory Visualization ───────────────────────────────────── -->
-    <section class="section" id="agents">
+    <!-- ─── Product Story ───────────────────────────────────────────────── -->
+    <section class="section" id="story" aria-labelledby="story-heading">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-tag">Continuity</span>
+          <h2 class="section-title" id="story-heading">One project. One memory. Any agent.</h2>
+          <p class="section-desc">
+            When AI sessions fill their context window, your project knowledge should persist — not disappear.
+          </p>
+        </div>
+
+        <div class="story-grid">
+          <div class="story-column story-column--without">
+            <h3 class="story-title story-title--without">
+              <span class="story-icon" aria-hidden="true">✕</span>
+              Without Local Brain
+            </h3>
+            <div class="story-flow">
+              <div class="story-step">Claude learns</div>
+              <div class="story-arrow" aria-hidden="true">→</div>
+              <div class="story-step">context fills</div>
+              <div class="story-arrow" aria-hidden="true">→</div>
+              <div class="story-step">session ends</div>
+              <div class="story-arrow" aria-hidden="true">→</div>
+              <div class="story-step">knowledge disappears</div>
+              <div class="story-arrow" aria-hidden="true">→</div>
+              <div class="story-step story-step--final">next agent starts from zero</div>
+            </div>
+          </div>
+
+          <div class="story-column story-column--with">
+            <h3 class="story-title story-title--with">
+              <span class="story-icon" aria-hidden="true">◆</span>
+              With Local Brain
+            </h3>
+            <div class="story-flow">
+              <div class="story-step">Claude learns</div>
+              <div class="story-arrow" aria-hidden="true">→</div>
+              <div class="story-step">brain_learn</div>
+              <div class="story-arrow" aria-hidden="true">→</div>
+              <div class="story-step">Local Brain</div>
+              <div class="story-arrow" aria-hidden="true">→</div>
+              <div class="story-step">local memory</div>
+              <div class="story-arrow" aria-hidden="true">→</div>
+              <div class="story-step">Cursor recalls</div>
+              <div class="story-arrow" aria-hidden="true">→</div>
+              <div class="story-step story-step--final">knowledge continues</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Shared Memory Visualization ─────────────────────────────────── -->
+    <section class="section" id="agents" aria-labelledby="agents-heading">
       <div class="container">
         <div class="section-header">
           <span class="section-tag">Cross-Agent Ecosystem</span>
-          <h2 class="section-title">Multiple agents → One shared project memory</h2>
+          <h2 class="section-title" id="agents-heading">Multiple agents → One shared project memory</h2>
           <p class="section-desc">
             Coding assistants operate in silos by default. Local Brain unifies them through standard MCP, allowing every agent to read, write, and validate the same project truth.
           </p>
         </div>
 
-        <div class="shared-memory-hub">
-          <div class="hub-glow"></div>
+        <div class="shared-memory-hub" role="region" aria-label="Multi-agent architecture diagram">
+          <div class="hub-glow" aria-hidden="true"></div>
           <div class="hub-grid">
             <!-- Left Agent Column -->
             <div class="agent-nodes-col">
               <div class="agent-node">
-                <span class="agent-dot-pulse"></span>
+                <span class="agent-dot-pulse" aria-hidden="true"></span>
                 <div>
                   <div class="agent-name">Claude Code</div>
                   <div class="agent-sub">Terminal Agent • Active</div>
                 </div>
               </div>
               <div class="agent-node">
-                <span class="agent-dot-pulse"></span>
+                <span class="agent-dot-pulse" aria-hidden="true"></span>
                 <div>
                   <div class="agent-name">Cursor</div>
                   <div class="agent-sub">IDE Assistant • Active</div>
                 </div>
               </div>
               <div class="agent-node">
-                <span class="agent-dot-pulse"></span>
+                <span class="agent-dot-pulse" aria-hidden="true"></span>
                 <div>
                   <div class="agent-name">Antigravity</div>
                   <div class="agent-sub">Pair Programmer • Active</div>
@@ -231,21 +289,21 @@
             <!-- Right Agent Column -->
             <div class="agent-nodes-col">
               <div class="agent-node">
-                <span class="agent-dot-pulse"></span>
+                <span class="agent-dot-pulse" aria-hidden="true"></span>
                 <div>
                   <div class="agent-name">GitHub Copilot</div>
                   <div class="agent-sub">VS Code Extension • Active</div>
                 </div>
               </div>
               <div class="agent-node">
-                <span class="agent-dot-pulse"></span>
+                <span class="agent-dot-pulse" aria-hidden="true"></span>
                 <div>
                   <div class="agent-name">Windsurf</div>
                   <div class="agent-sub">Cascade Agent • Active</div>
                 </div>
               </div>
               <div class="agent-node">
-                <span class="agent-dot-pulse"></span>
+                <span class="agent-dot-pulse" aria-hidden="true"></span>
                 <div>
                   <div class="agent-name">Zed & Custom Agents</div>
                   <div class="agent-sub">MCP Context Server • Active</div>
@@ -257,12 +315,12 @@
       </div>
     </section>
 
-    <!-- ─── How It Works ──────────────────────────────────────────────────── -->
-    <section class="section" id="how-it-works">
+    <!-- ─── How It Works ────────────────────────────────────────────────── -->
+    <section class="section" id="how-it-works" aria-labelledby="pipeline-heading">
       <div class="container">
         <div class="section-header">
           <span class="section-tag">Pipeline</span>
-          <h2 class="section-title">How Local Brain Works</h2>
+          <h2 class="section-title" id="pipeline-heading">How Local Brain Works</h2>
           <p class="section-desc">
             A continuous three-step loop that extracts, persists, and ranks high-signal engineering context without bloat.
           </p>
@@ -327,205 +385,18 @@
       </div>
     </section>
 
-    <!-- ─── Context Handoff ───────────────────────────────────────────────── -->
-    <section class="section">
-      <div class="container">
-        <div class="handoff-box">
-          <div class="section-header" style="margin-bottom: 24px;">
-            <span class="section-tag">Continuity</span>
-            <h2 class="section-title">Context limits shouldn't erase project knowledge</h2>
-            <p class="section-desc">
-              When an AI session fills its context window or you switch between specialized tools, Local Brain acts as the shared durable memory layer.
-            </p>
-          </div>
-
-          <div class="handoff-timeline">
-            <div class="timeline-item">
-              <div class="timeline-title">1. Claude Code</div>
-              <div class="timeline-desc">Discovers Supabase RLS INSERT policy constraint</div>
-            </div>
-            <div class="timeline-arrow">→</div>
-            <div class="timeline-item" style="border-color: rgba(168, 85, 247, 0.4);">
-              <div class="timeline-title" style="color: var(--cyan);">2. Local Brain</div>
-              <div class="timeline-desc">Indexes lesson into project-scoped memory store</div>
-            </div>
-            <div class="timeline-arrow">→</div>
-            <div class="timeline-item">
-              <div class="timeline-title">3. Session Switch</div>
-              <div class="timeline-desc">Claude context resets or work moves to Cursor / Antigravity</div>
-            </div>
-            <div class="timeline-arrow">→</div>
-            <div class="timeline-item" style="border-color: rgba(16, 185, 129, 0.4);">
-              <div class="timeline-title" style="color: var(--green);">4. Recalled & Validated</div>
-              <div class="timeline-desc">Next agent recalls the exact fix instantly</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ─── Features Grid ─────────────────────────────────────────────────── -->
-    <section class="section" id="features">
-      <div class="container">
-        <div class="section-header">
-          <span class="section-tag">Core Capabilities</span>
-          <h2 class="section-title">Built for serious engineering teams</h2>
-          <p class="section-desc">
-            Engineered from first principles for fast local execution, strict token economics, and multi-agent coordination.
-          </p>
-        </div>
-
-        <div class="features-grid">
-          <!-- Feature 1 -->
-          <div class="feature-card">
-            <div class="feature-icon-wrap">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-              </svg>
-            </div>
-            <h3 class="feature-title">100% Local-First</h3>
-            <p class="feature-desc">
-              Your memory stays on your device. Zero external cloud egress, zero foreign databases, and total privacy for proprietary codebases.
-            </p>
-          </div>
-
-          <!-- Feature 2 -->
-          <div class="feature-card">
-            <div class="feature-icon-wrap">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="18" cy="18" r="3"></circle>
-                <circle cx="6" cy="6" r="3"></circle>
-                <path d="M13 6h3a2 2 0 0 1 2 2v7"></path>
-                <line x1="6" y1="9" x2="6" y2="21"></line>
-              </svg>
-            </div>
-            <h3 class="feature-title">Git-Aware Provenance</h3>
-            <p class="feature-desc">
-              Every stored memory retains repository root, branch name, commit SHA, file path, and authoring agent metadata with automatic git-diff invalidation.
-            </p>
-          </div>
-
-          <!-- Feature 3 -->
-          <div class="feature-card">
-            <div class="feature-icon-wrap">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                <circle cx="9" cy="7" r="4"></circle>
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-              </svg>
-            </div>
-            <h3 class="feature-title">Multi-Agent Consensus</h3>
-            <p class="feature-desc">
-              Cross-agent validation boosts verified memories, while contradiction detection applies an automatic 0.60× penalty to outdated or conflicting guidance.
-            </p>
-          </div>
-
-          <!-- Feature 4 -->
-          <div class="feature-card">
-            <div class="feature-icon-wrap">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
-                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
-                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
-              </svg>
-            </div>
-            <h3 class="feature-title">Embedded SQLite Vector Store</h3>
-            <p class="feature-desc">
-              High-concurrency Write-Ahead Logging (WAL) ensures simultaneous agent read/write operations without lock collisions or server dependencies.
-            </p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ─── Interactive Terminal / Code Section ───────────────────────────── -->
-    <section class="section" id="install">
-      <div class="container">
-        <div class="section-header">
-          <span class="section-tag">Quick Start</span>
-          <h2 class="section-title">Setup in under 30 seconds</h2>
-          <p class="section-desc">
-            Install globally or run via npx. Local Brain auto-detects installed editors and links MCP configurations automatically.
-          </p>
-        </div>
-
-        <div class="code-tabs-wrapper">
-          <div class="code-tabs-header">
-            <div class="code-tabs">
-              <button class="code-tab-btn active" data-tab="tab-quickstart">1. Quickstart</button>
-              <button class="code-tab-btn" data-tab="tab-ingest">2. Ingest History</button>
-              <button class="code-tab-btn" data-tab="tab-query">3. Search Recall</button>
-              <button class="code-tab-btn" data-tab="tab-config">4. MCP Config</button>
-            </div>
-            <button class="btn-copy-tab" aria-label="Copy code to clipboard">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-              </svg>
-              <span>Copy</span>
-            </button>
-          </div>
-
-          <!-- Panel 1 -->
-          <div class="code-panel active" id="tab-quickstart">
-            <pre><code><span style="color: var(--text-dim);"># Navigate to your project and initialize Local Brain</span>
-<span style="color: var(--cyan);">cd</span> /path/to/your-repo
-<span style="color: var(--purple);">npx</span> local-brain init
-
-<span style="color: var(--text-dim);"># Auto-detects Claude Code, Cursor, Antigravity, Copilot, Windsurf & Zed</span>
-<span style="color: var(--green);">✓ Local Brain initialized successfully</span></code></pre>
-          </div>
-
-          <!-- Panel 2 -->
-          <div class="code-panel" id="tab-ingest">
-            <pre><code><span style="color: var(--text-dim);"># Ingest high-signal Git history into your local SQLite memory</span>
-<span style="color: var(--purple);">local-brain</span> ingest --since <span style="color: var(--cyan);">"12 months ago"</span> --commits <span style="color: var(--cyan);">500</span>
-
-<span style="color: var(--green);">✓ Ingest complete:</span>
-   Scanned:  348
-   Ingested: 42
-   Merged:   18</code></pre>
-          </div>
-
-          <!-- Panel 3 -->
-          <div class="code-panel" id="tab-query">
-            <pre><code><span style="color: var(--text-dim);"># Query semantic memory directly from terminal</span>
-<span style="color: var(--purple);">local-brain</span> query <span style="color: var(--cyan);">"JWT token refresh edge runtime"</span>
-
-<span style="color: var(--cyan);">◈> Local Brain Recall</span>
-• [src/auth/jwt.ts] (fix [agent: cursor]): Use jose instead of jsonwebtoken for edge runtime
-  ⚡ Recall latency: 1.82 ms | Tokens: 48/250</code></pre>
-          </div>
-
-          <!-- Panel 4 -->
-          <div class="code-panel" id="tab-config">
-            <pre><code><span style="color: var(--text-dim);">// Claude Code (.claude.json) or Cursor (.cursor/mcp.json)</span>
-{
-  <span style="color: var(--purple);">"mcpServers"</span>: {
-    <span style="color: var(--cyan);">"local-brain"</span>: {
-      <span style="color: var(--purple);">"command"</span>: <span style="color: #FFF;">"node"</span>,
-      <span style="color: var(--purple);">"args"</span>: [<span style="color: #FFF;">"/path/to/local-brain-mcp/dist/mcp-server.js"</span>]
-    }
-  }
-}</code></pre>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ─── MCP Architecture Section ──────────────────────────────────────── -->
-    <section class="section" id="architecture">
+    <!-- ─── Multi-Agent Architecture ───────────────────────────────────── -->
+    <section class="section" id="architecture" aria-labelledby="arch-heading">
       <div class="container">
         <div class="section-header">
           <span class="section-tag">Protocol</span>
-          <h2 class="section-title">Model Context Protocol Reference</h2>
+          <h2 class="section-title" id="arch-heading">Model Context Protocol Reference</h2>
           <p class="section-desc">
             Exposes 7 standards-compliant MCP tools with complete runtime annotations for idempotency, read-only guarantees, and safety hints.
           </p>
         </div>
 
-        <div class="mcp-arch-card">
+        <div class="mcp-arch-card" role="region" aria-label="MCP tools reference">
           <div class="mcp-tools-grid">
             <div class="tool-chip">
               <div class="tool-name">brain_recall</div>
@@ -560,12 +431,195 @@
       </div>
     </section>
 
-    <!-- ─── Security & Trust ──────────────────────────────────────────────── -->
-    <section class="section">
+    <!-- ─── Features Grid ───────────────────────────────────────────────── -->
+    <section class="section" id="features" aria-labelledby="features-heading">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-tag">Core Capabilities</span>
+          <h2 class="section-title" id="features-heading">Built for serious engineering teams</h2>
+          <p class="section-desc">
+            Engineered from first principles for fast local execution, strict token economics, and multi-agent coordination.
+          </p>
+        </div>
+
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="feature-icon-wrap">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </div>
+            <h3 class="feature-title">100% Local-First</h3>
+            <p class="feature-desc">
+              Your memory stays on your device. Zero external cloud egress, zero foreign databases, and total privacy for proprietary codebases.
+            </p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-icon-wrap">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <circle cx="18" cy="18" r="3"></circle>
+                <circle cx="6" cy="6" r="3"></circle>
+                <path d="M13 6h3a2 2 0 0 1 2 2v7"></path>
+                <line x1="6" y1="9" x2="6" y2="21"></line>
+              </svg>
+            </div>
+            <h3 class="feature-title">Git-Aware Provenance</h3>
+            <p class="feature-desc">
+              Every stored memory retains repository root, branch name, commit SHA, file path, and authoring agent metadata with automatic git-diff invalidation.
+            </p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-icon-wrap">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 1 0 7.75"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+              </svg>
+            </div>
+            <h3 class="feature-title">Multi-Agent Consensus</h3>
+            <p class="feature-desc">
+              Cross-agent validation boosts verified memories, while contradiction detection applies an automatic 0.60× penalty to outdated or conflicting guidance.
+            </p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-icon-wrap">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3V5"></path>
+                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+              </svg>
+            </div>
+            <h3 class="feature-title">Embedded SQLite Vector Store</h3>
+            <p class="feature-desc">
+              High-concurrency Write-Ahead Logging (WAL) ensures simultaneous agent read/write operations without lock collisions or server dependencies.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Context Handoff ─────────────────────────────────────────────── -->
+    <section class="section" aria-labelledby="handoff-heading">
+      <div class="container">
+        <div class="handoff-box">
+          <div class="section-header" style="margin-bottom: 24px;">
+            <span class="section-tag">Continuity</span>
+            <h2 class="section-title" id="handoff-heading">Context limits shouldn't erase project knowledge</h2>
+            <p class="section-desc">
+              When an AI session fills its context window or you switch between specialized tools, Local Brain acts as the shared durable memory layer.
+            </p>
+          </div>
+
+          <div class="handoff-timeline" role="list" aria-label="Context handoff timeline">
+            <div class="timeline-item" role="listitem">
+              <div class="timeline-title">1. Claude Code</div>
+              <div class="timeline-desc">Discovers Supabase RLS INSERT policy constraint</div>
+            </div>
+            <div class="timeline-arrow" aria-hidden="true">→</div>
+            <div class="timeline-item" style="border-color: rgba(168, 85, 247, 0.4);" role="listitem">
+              <div class="timeline-title" style="color: var(--cyan);">2. Local Brain</div>
+              <div class="timeline-desc">Indexes lesson into project-scoped memory store</div>
+            </div>
+            <div class="timeline-arrow" aria-hidden="true">→</div>
+            <div class="timeline-item" role="listitem">
+              <div class="timeline-title">3. Session Switch</div>
+              <div class="timeline-desc">Claude context resets or work moves to Cursor / Antigravity</div>
+            </div>
+            <div class="timeline-arrow" aria-hidden="true">→</div>
+            <div class="timeline-item" style="border-color: rgba(16, 185, 129, 0.4);" role="listitem">
+              <div class="timeline-title" style="color: var(--green);">4. Recalled & Validated</div>
+              <div class="timeline-desc">Next agent recalls the exact fix instantly</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Interactive Terminal / Code Section ────────────────────────── -->
+    <section class="section" id="install" aria-labelledby="install-heading">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-tag">Quick Start</span>
+          <h2 class="section-title" id="install-heading">Setup in under 30 seconds</h2>
+          <p class="section-desc">
+            Install globally or run via npx. Local Brain auto-detects installed editors and links MCP configurations automatically.
+          </p>
+        </div>
+
+        <div class="code-tabs-wrapper" role="region" aria-label="Code examples">
+          <div class="code-tabs-header">
+            <div class="code-tabs" role="tablist" aria-label="Code examples">
+              <button class="code-tab-btn active" data-tab="tab-quickstart" role="tab" aria-selected="true" aria-controls="tab-quickstart">1. Quickstart</button>
+              <button class="code-tab-btn" data-tab="tab-ingest" role="tab" aria-selected="false" aria-controls="tab-ingest">2. Ingest History</button>
+              <button class="code-tab-btn" data-tab="tab-query" role="tab" aria-selected="false" aria-controls="tab-query">3. Search Recall</button>
+              <button class="code-tab-btn" data-tab="tab-config" role="tab" aria-selected="false" aria-controls="tab-config">4. MCP Config</button>
+            </div>
+            <button class="btn-copy-tab" aria-label="Copy code to clipboard" data-copy-target="#tab-quickstart pre">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <span>Copy</span>
+            </button>
+          </div>
+
+          <!-- Panel 1 -->
+          <div class="code-panel active" id="tab-quickstart" role="tabpanel" aria-labelledby="tab-quickstart">
+            <pre><code><span style="color: var(--text-dim);"># Navigate to your project and initialize Local Brain</span>
+<span style="color: var(--cyan);">cd</span> /path/to/your-repo
+<span style="color: var(--purple);">npx</span> local-brain init
+
+<span style="color: var(--text-dim);"># Auto-detects Claude Code, Cursor, Antigravity, Copilot, Windsurf & Zed</span>
+<span style="color: var(--green);">✓ Local Brain initialized successfully</span></code></pre>
+          </div>
+
+          <!-- Panel 2 -->
+          <div class="code-panel" id="tab-ingest" role="tabpanel" aria-labelledby="tab-ingest">
+            <pre><code><span style="color: var(--text-dim);"># Ingest high-signal Git history into your local SQLite memory</span>
+<span style="color: var(--purple);">local-brain</span> ingest --since <span style="color: var(--cyan);">"12 months ago"</span> --commits <span style="color: var(--cyan);">500</span>
+
+<span style="color: var(--green);">✓ Ingest complete:</span>
+   Scanned:  348
+   Ingested: 42
+   Merged:   18</code></pre>
+          </div>
+
+          <!-- Panel 3 -->
+          <div class="code-panel" id="tab-query" role="tabpanel" aria-labelledby="tab-query">
+            <pre><code><span style="color: var(--text-dim);"># Query semantic memory directly from terminal</span>
+<span style="color: var(--purple);">local-brain</span> query <span style="color: var(--cyan);">"JWT token refresh edge runtime"</span>
+
+<span style="color: var(--cyan);">◈> Local Brain Recall</span>
+• [src/auth/jwt.ts] (fix [agent: cursor]): Use jose instead of jsonwebtoken for edge runtime
+  ⚡ Recall latency: 1.82 ms | Tokens: 48/250</code></pre>
+          </div>
+
+          <!-- Panel 4 -->
+          <div class="code-panel" id="tab-config" role="tabpanel" aria-labelledby="tab-config">
+            <pre><code><span style="color: var(--text-dim);">// Claude Code (.claude.json) or Cursor (.cursor/mcp.json)</span>
+{
+  <span style="color: var(--purple);">"mcpServers"</span>: {
+    <span style="color: var(--cyan);">"local-brain"</span>: {
+      <span style="color: var(--purple);">"command"</span>: <span style="color: #FFF;">"node"</span>,
+      <span style="color: var(--purple);">"args"</span>: [<span style="color: #FFF;">"/path/to/local-brain-mcp/dist/mcp-server.js"</span>]
+    }
+  }
+}</code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Security & Trust ──────────────────────────────────────────── -->
+    <section class="section" aria-labelledby="trust-heading">
       <div class="container">
         <div class="section-header">
           <span class="section-tag">Security Guarantee</span>
-          <h2 class="section-title">Your memory stays local</h2>
+          <h2 class="section-title" id="trust-heading">Your memory stays local</h2>
           <p class="section-desc">
             Local Brain is designed for privacy-conscious developers and sensitive codebases.
           </p>
@@ -574,7 +628,7 @@
         <div class="trust-grid">
           <div class="trust-item">
             <div class="trust-title">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" aria-hidden="true">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
               </svg>
               <span>Zero Network Egress</span>
@@ -586,7 +640,7 @@
 
           <div class="trust-item">
             <div class="trust-title">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" aria-hidden="true">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
               </svg>
@@ -599,7 +653,7 @@
 
           <div class="trust-item">
             <div class="trust-title">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2" aria-hidden="true">
                 <circle cx="12" cy="12" r="10"></circle>
                 <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
               </svg>
@@ -613,17 +667,17 @@
       </div>
     </section>
 
-    <!-- ─── Open Source CTA ───────────────────────────────────────────────── -->
-    <section class="section">
+    <!-- ─── Open Source CTA ───────────────────────────────────────────── -->
+    <section class="section" aria-labelledby="cta-heading">
       <div class="container">
         <div class="github-cta-card">
-          <h2 class="github-cta-title">Open Source & Community Driven</h2>
+          <h2 class="github-cta-title" id="cta-heading">Open Source & Community Driven</h2>
           <p class="github-cta-desc">
             Local Brain MCP is published under the permissive MIT License. Contributions, issue reports, and integrations are welcome.
           </p>
           <div class="hero-cta-group" style="margin-bottom: 0;">
             <a href="https://github.com/cosmiccoder200x-sys/local-brain-mcp" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
               </svg>
               <span>Star on GitHub</span>
@@ -637,8 +691,8 @@
     </section>
   </main>
 
-  <!-- ─── Site Footer ───────────────────────────────────────────────────── -->
-  <footer class="site-footer">
+  <!-- ─── Site Footer ───────────────────────────────────────────── -->
+  <footer class="site-footer" role="contentinfo">
     <div class="container">
       <div class="footer-inner">
         <div class="footer-brand">

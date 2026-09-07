@@ -1,8 +1,8 @@
 /* ==========================================================================
-   Local Brain MCP — Official Design System & Stylesheet
-   Theme: Dark Minimal Technical Developer-First
-   Palette: Purple (#A855F7) -> Blue (#3B82F6) -> Cyan (#06B6D4)
-   ========================================================================== */
+    Local Brain MCP — Official Design System & Stylesheet
+    Theme: Dark Minimal Technical Developer-First
+    Palette: Purple (#A855F7) -> Blue (#3B82F6) -> Cyan (#06B6D4)
+    ========================================================================== */
 
 :root {
   --bg: #06090F;
@@ -11,44 +11,53 @@
   --surface-2: #162035;
   --surface-3: #1E2B47;
   --surface-glass: rgba(16, 22, 38, 0.75);
-  
+
   --border: rgba(255, 255, 255, 0.08);
   --border-subtle: rgba(255, 255, 255, 0.04);
   --border-hover: rgba(255, 255, 255, 0.16);
   --border-focus: rgba(6, 182, 212, 0.5);
-  
+
   --text: #F8FAFC;
   --text-muted: #94A3B8;
   --text-dim: #64748B;
-  
+
   --purple: #A855F7;
   --blue: #3B82F6;
   --cyan: #06B6D4;
   --green: #10B981;
   --yellow: #F59E0B;
   --red: #EF4444;
-  
+
   --brand-grad: linear-gradient(135deg, #A855F7 0%, #3B82F6 50%, #06B6D4 100%);
   --brand-grad-hover: linear-gradient(135deg, #C084FC 0%, #60A5FA 50%, #22D3EE 100%);
   --brand-glow: 0 0 35px rgba(59, 130, 246, 0.25);
   --cyan-glow: 0 0 25px rgba(6, 182, 212, 0.2);
-  
+
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, monospace;
-  
+
   --max-w: 1200px;
   --header-h: 70px;
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
   --radius-full: 9999px;
-  
+
   --transition-fast: 0.15s ease;
   --transition-normal: 0.25s ease;
   --transition-smooth: 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 56px;
+  --space-4xl: 96px;
 }
 
-/* ─── Reset & Base ───────────────────────────────────────────────────────── */
+/* ─── Reset & Base ───────────────────────────────────────────────── */
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -92,7 +101,27 @@ code, pre {
   font-family: var(--font-mono);
 }
 
-/* ─── Background Neural Canvas ────────────────────────────────────────────── */
+/* ─── Skip Link (Accessibility) ──────────────────────────────────── */
+
+.skip-link {
+  position: fixed;
+  top: -100%;
+  left: 16px;
+  z-index: 10000;
+  padding: 12px 24px;
+  background: var(--cyan);
+  color: #000;
+  font-weight: 700;
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  transition: top var(--transition-fast);
+}
+
+.skip-link:focus {
+  top: 16px;
+}
+
+/* ─── Background Neural Canvas ───────────────────────────────────── */
 
 #neural-canvas {
   position: fixed;
@@ -105,7 +134,7 @@ code, pre {
   opacity: 0.6;
 }
 
-/* ─── Layout Container ────────────────────────────────────────────────────── */
+/* ─── Layout Container ──────────────────────────────────────────── */
 
 .container {
   max-width: var(--max-w);
@@ -114,17 +143,17 @@ code, pre {
 }
 
 .section {
-  padding: 96px 0;
+  padding: var(--space-4xl) 0;
   position: relative;
 }
 
 @media (max-width: 768px) {
   .section {
-    padding: 64px 0;
+    padding: var(--space-3xl) 0;
   }
 }
 
-/* ─── Navigation Bar ──────────────────────────────────────────────────────── */
+/* ─── Navigation Bar ────────────────────────────────────────────── */
 
 .site-header {
   position: sticky;
@@ -184,6 +213,12 @@ code, pre {
   color: var(--text);
 }
 
+.nav-link:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 4px;
+  border-radius: var(--radius-sm);
+}
+
 .nav-actions {
   display: flex;
   align-items: center;
@@ -210,10 +245,21 @@ code, pre {
   transform: translateY(-1px);
 }
 
+.btn-github:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
 .mobile-toggle {
   display: none;
   padding: 8px;
   color: var(--text);
+}
+
+.mobile-toggle:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
 @media (max-width: 860px) {
@@ -249,7 +295,13 @@ code, pre {
   padding: 8px 0;
 }
 
-/* ─── Buttons ─────────────────────────────────────────────────────────────── */
+.mobile-nav .nav-link:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ─── Buttons ──────────────────────────────────────────────────── */
 
 .btn {
   display: inline-flex;
@@ -262,6 +314,11 @@ code, pre {
   font-weight: 600;
   transition: all var(--transition-normal);
   text-align: center;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
 }
 
 .btn-primary {
@@ -294,7 +351,7 @@ code, pre {
   border-radius: var(--radius-sm);
 }
 
-/* ─── Badges & Tags ──────────────────────────────────────────────────────── */
+/* ─── Badges & Tags ────────────────────────────────────────────── */
 
 .badge {
   display: inline-flex;
@@ -329,7 +386,7 @@ code, pre {
   box-shadow: 0 0 8px currentColor;
 }
 
-/* ─── Hero Section ────────────────────────────────────────────────────────── */
+/* ─── Hero Section ─────────────────────────────────────────────── */
 
 .hero-section {
   padding: 80px 0 100px;
@@ -376,7 +433,7 @@ code, pre {
   flex-wrap: wrap;
 }
 
-/* ─── Hero Terminal Window ────────────────────────────────────────────────── */
+/* ─── Hero Terminal Window ──────────────────────────────────────── */
 
 .terminal-window {
   background: #090D16;
@@ -450,6 +507,7 @@ code, pre {
   color: var(--purple);
   margin: 12px 0;
   line-height: 1.25;
+  font-family: var(--font-mono);
 }
 
 .term-success {
@@ -484,7 +542,7 @@ code, pre {
   50%, 100% { opacity: 0; }
 }
 
-/* ─── Hero Stats Strip ────────────────────────────────────────────────────── */
+/* ─── Hero Stats Strip ─────────────────────────────────────────── */
 
 .hero-stats {
   display: grid;
@@ -523,7 +581,86 @@ code, pre {
   margin-top: 4px;
 }
 
-/* ─── Section Header ──────────────────────────────────────────────────────── */
+/* ─── Product Story Section ─────────────────────────────────────── */
+
+.story-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  margin-top: 40px;
+}
+
+@media (max-width: 768px) {
+  .story-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.story-column {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 32px 24px;
+}
+
+.story-column--without {
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.story-column--with {
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.story-title {
+  font-weight: 700;
+  font-size: 1.25rem;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.story-title--without {
+  color: var(--red);
+}
+
+.story-title--with {
+  color: var(--green);
+}
+
+.story-icon {
+  font-size: 1.1rem;
+}
+
+.story-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.story-step {
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+
+.story-step--final {
+  color: var(--text);
+  font-weight: 600;
+  background: var(--surface-3);
+}
+
+.story-arrow {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 1.2rem;
+}
+
+/* ─── Section Header ───────────────────────────────────────────── */
 
 .section-header {
   text-align: center;
@@ -555,7 +692,7 @@ code, pre {
   color: var(--text-muted);
 }
 
-/* ─── Shared Memory Visualization ─────────────────────────────────────────── */
+/* ─── Shared Memory Visualization ──────────────────────────────── */
 
 .shared-memory-hub {
   background: var(--surface);
@@ -672,7 +809,7 @@ code, pre {
   font-family: var(--font-mono);
 }
 
-/* ─── How It Works (01 Learn, 02 Store, 03 Recall) ────────────────────────── */
+/* ─── How It Works ─────────────────────────────────────────────── */
 
 .steps-grid {
   display: grid;
@@ -738,13 +875,14 @@ code, pre {
   font-size: 0.8rem;
   color: #94A3B8;
   line-height: 1.5;
+  overflow-x: auto;
 }
 
 .step-code-preview .kw { color: var(--purple); }
 .step-code-preview .str { color: var(--cyan); }
 .step-code-preview .fn { color: #60A5FA; }
 
-/* ─── Context Handoff Section ─────────────────────────────────────────────── */
+/* ─── Context Handoff Section ────────────────────────────────── */
 
 .handoff-box {
   background: var(--surface);
@@ -809,7 +947,7 @@ code, pre {
   color: var(--text-muted);
 }
 
-/* ─── Features Grid ───────────────────────────────────────────────────────── */
+/* ─── Features Grid ────────────────────────────────────────────── */
 
 .features-grid {
   display: grid;
@@ -862,7 +1000,7 @@ code, pre {
   line-height: 1.6;
 }
 
-/* ─── Interactive Terminal / Code Section ─────────────────────────────────── */
+/* ─── Interactive Terminal / Code Section ──────────────────────── */
 
 .code-tabs-wrapper {
   background: #090D17;
@@ -902,6 +1040,11 @@ code, pre {
   color: var(--text);
 }
 
+.code-tab-btn:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: -2px;
+}
+
 .code-tab-btn.active {
   color: var(--cyan);
   border-bottom-color: var(--cyan);
@@ -926,6 +1069,11 @@ code, pre {
   border-color: var(--border-hover);
 }
 
+.btn-copy-tab:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
 .code-panel {
   display: none;
   padding: 24px;
@@ -940,7 +1088,7 @@ code, pre {
   display: block;
 }
 
-/* ─── MCP Architecture Section ────────────────────────────────────────────── */
+/* ─── MCP Architecture Section ────────────────────────────────── */
 
 .mcp-arch-card {
   background: var(--surface);
@@ -976,7 +1124,7 @@ code, pre {
   color: var(--text-muted);
 }
 
-/* ─── Security & Trust ────────────────────────────────────────────────────── */
+/* ─── Security & Trust ────────────────────────────────────────── */
 
 .trust-grid {
   display: grid;
@@ -1012,7 +1160,7 @@ code, pre {
   line-height: 1.6;
 }
 
-/* ─── GitHub CTA Banner ───────────────────────────────────────────────────── */
+/* ─── GitHub CTA Banner ──────────────────────────────────────── */
 
 .github-cta-card {
   background: linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(59, 130, 246, 0.12) 50%, rgba(6, 182, 212, 0.1) 100%);
@@ -1037,7 +1185,7 @@ code, pre {
   margin: 0 auto 32px;
 }
 
-/* ─── Footer ──────────────────────────────────────────────────────────────── */
+/* ─── Footer ──────────────────────────────────────────────────── */
 
 .site-footer {
   border-top: 1px solid var(--border);
@@ -1081,6 +1229,12 @@ code, pre {
   color: var(--text);
 }
 
+.footer-link:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
 .footer-bottom {
   text-align: center;
   font-size: 0.8rem;
@@ -1089,7 +1243,7 @@ code, pre {
   padding-top: 24px;
 }
 
-/* ─── Reduced Motion ──────────────────────────────────────────────────────── */
+/* ─── Reduced Motion ──────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -1100,5 +1254,49 @@ code, pre {
   }
   #neural-canvas {
     display: none;
+  }
+  .term-cursor {
+    animation: none;
+    opacity: 1;
+  }
+  .agent-dot-pulse {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ─── Mobile Responsive ──────────────────────────────────────── */
+
+@media (max-width: 375px) {
+  .hero-title {
+    font-size: 2rem;
+  }
+  .hero-stats {
+    grid-template-columns: 1fr;
+  }
+  .terminal-body {
+    font-size: 0.78rem;
+    padding: 16px;
+  }
+}
+
+@media (max-width: 430px) {
+  .code-tab-btn {
+    padding: 12px 10px;
+    font-size: 0.78rem;
+  }
+  .btn {
+    padding: 10px 16px;
+    font-size: 0.88rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .handoff-timeline {
+    grid-template-columns: 1fr;
+  }
+  .story-flow {
+    gap: 8px;
   }
 }
