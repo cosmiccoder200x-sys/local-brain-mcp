@@ -25,18 +25,14 @@
 Requires **Node.js >= 18.0.0**.
 
 ```bash
-# Install globally
-npm install -g local-brain-mcp
+# Install globally straight from GitHub
+npm install -g github:cosmiccoder200x-sys/local-brain-mcp
 
 # Verify
 local-brain --version
 ```
 
-No global install? Run it directly with npx:
-
-```bash
-npx -p local-brain-mcp local-brain --version
-```
+> npm registry release (`npm install -g local-brain-mcp`) is coming soon — until then, install from GitHub as above.
 
 Then continue with [Quick Start](#quick-start) below (`local-brain init` → `ingest` → `status`).
 
@@ -81,13 +77,13 @@ When multiple coding assistants (**Claude Code, Cursor, Antigravity, GitHub Copi
 cd /path/to/your-project
 
 # 2. Auto-detect installed AI editors and link MCP configuration
-npx local-brain init
+local-brain init
 
 # 3. Ingest your Git history into the local brain database
-npx local-brain ingest
+local-brain ingest
 
 # 4. Check multi-agent memory statistics
-npx local-brain status
+local-brain status
 
 # 5. Start collaborating with Claude Code, Cursor, Antigravity, Copilot, or Windsurf!
 ```
