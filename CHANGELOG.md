@@ -5,6 +5,20 @@ All notable changes to `local-brain-mcp` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-09-07
+
+### Fixed
+- **Corrected Node.js requirement to `>= 22.0.0`** across `package.json`,
+  `package-lock.json`, README, website, troubleshooting guide, and the
+  `local-brain doctor` output (which now reads the requirement from
+  `package.json` instead of a hardcoded string). `better-sqlite3@13` physically
+  requires Node 22+, so the previous `>= 18` range permitted broken installs.
+- Replaced unqualified "< 5 ms recall" claims with measured numbers
+  (~3 ms p50, 5.7 ms p95, local 1k-memory benchmark) in README and website.
+- Corrected the documented memory-store path from `.local-brain/memory.db` to
+  the actual `.git/brain.db` in README, website, and `docs/multi-agent.md`.
+- Removed stale `dist/schema.sql` build artifact from the published package.
+
 ## [1.3.0] - 2026-09-07
 
 ### Added

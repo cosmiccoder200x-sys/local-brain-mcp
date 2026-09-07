@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { MCP_TOOLS } from '../../dist/mcp-server.js';
 
 describe('MCP Tool Annotations', () => {
-  it('should register all required MCP tools (7 tools in v1.3.0)', () => {
+  it('should register all required MCP tools (7 tools in v1.3.1)', () => {
     const toolNames = MCP_TOOLS.map(t => t.name).sort();
     assert.deepEqual(toolNames, [
       'brain_forget',

@@ -109,7 +109,7 @@ local-brain status
 PROJECT       retail-gem-quest
 MEMORY STORE  .git/brain.db
 STATUS        ● ACTIVE
-VERSION       1.3.0
+VERSION       1.3.1
 
 MEMORIES      0
 LESSONS       0
