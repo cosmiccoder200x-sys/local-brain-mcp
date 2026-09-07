@@ -1,5 +1,5 @@
 /**
- * version.ts — Single source of truth for the package version.
+ * version.ts — Single source of truth for the package version and engines.
  *
  * Read from package.json at module load time. Avoids hardcoding the version
  * in multiple files and prevents version drift between cli.ts, mcp-server.ts,
@@ -8,15 +8,16 @@
 import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
-function readVersion() {
+function readPkg() {
     try {
         const __dirname = dirname(fileURLToPath(import.meta.url));
-        const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf8"));
-        return pkg.version ?? "0.0.0";
+        return JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf8"));
     }
     catch {
-        return "0.0.0";
+        return {};
     }
 }
-export const VERSION = readVersion();
+const pkg = readPkg();
+export const VERSION = pkg.version ?? "0.0.0";
+export const ENGINES_NODE = pkg.engines?.node ?? ">=22.0.0";
 //# sourceMappingURL=version.js.map

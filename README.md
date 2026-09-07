@@ -1,7 +1,7 @@
 [![M8ven Score](https://m8ven.ai/badge/mcp/cosmiccoder200x-sys-local-brain-mcp-1eus5c)](https://m8ven.ai/mcp/cosmiccoder200x-sys-local-brain-mcp-1eus5c)
 [![local-brain-mcp MCP server](https://glama.ai/mcp/servers/cosmiccoder200x-sys/local-brain-mcp/badges/card.svg)](https://glama.ai/mcp/servers/cosmiccoder200x-sys/local-brain-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
+[![Node Version](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen.svg)](https://nodejs.org/)
 [![Website](https://img.shields.io/badge/website-live-06B6D4.svg)](https://local-brain-mcp.vercel.app/)
 [![CI](https://github.com/cosmiccoder200x-sys/local-brain-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/cosmiccoder200x-sys/local-brain-mcp/actions)
 [![npm version](https://img.shields.io/npm/v/local-brain-mcp.svg)](https://www.npmjs.com/package/local-brain-mcp)
@@ -24,7 +24,7 @@
 
 ## 📦 Installation
 
-Requires **Node.js >= 18.0.0**.
+Requires **Node.js >= 22.0.0**.
 
 ```bash
 # Install globally from npm
@@ -57,7 +57,7 @@ When multiple coding assistants (**Claude Code, Cursor, Antigravity, GitHub Copi
 
 | Problem with standard AI memory tools | How Local Brain MCP solves it |
 |---|---|
-| 150–800ms network latency per recall | **< 5ms** — local embedded SQLite vector search |
+| 150–800ms network latency per recall | **~3 ms p50** (5.7 ms p95, local 1k-memory benchmark) |
 | Source code sent to foreign servers | **100% on-device**, zero egress, total privacy |
 | Context bloat on every session | **Hard 250-token budget cap** per recall |
 | Agent isolation (Claude vs Cursor silos) | **Shared multi-agent memory** with provenance |
@@ -107,7 +107,7 @@ local-brain status
 ✓ Local Brain initialized successfully
 
 PROJECT       retail-gem-quest
-MEMORY STORE  .local-brain/memory.db
+MEMORY STORE  .git/brain.db
 STATUS        ● ACTIVE
 VERSION       1.3.0
 
@@ -248,7 +248,7 @@ local-brain --no-color               # Disable color output
 
 For detailed multi-agent documentation, see [docs/multi-agent.md](docs/multi-agent.md) and [docs/architecture.md](docs/architecture.md).
 
-**Memory is local.** Vercel does not host the local memory database. Each project's memory is scoped to its repository root under `.local-brain/memory.db`.
+**Memory is local.** Vercel does not host the local memory database. Each project's memory is scoped to its repository root under `.git/brain.db` (or `~/.config/local-brain/brain.db` when no repository root applies).
 
 **Agent identity is provenance.** Agents do not automatically share context unless Local Brain tools (`brain_learn`, `brain_recall`, `brain_validate`) are invoked via MCP.
 
@@ -256,7 +256,7 @@ For detailed multi-agent documentation, see [docs/multi-agent.md](docs/multi-age
 
 ## Node Version Requirements
 
-Local Brain MCP requires Node.js **22.x or 24.x** (matching `better-sqlite3` engine requirements).
+Local Brain MCP requires Node.js **>= 22.0.0** (matching the `better-sqlite3` engine requirement). CI tests Node 22.x and 24.x.
 
 ---
 

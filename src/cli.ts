@@ -64,7 +64,7 @@ import {
   setColorEnabled,
   isColorSupported,
 } from "./theme.js";
-import { VERSION } from "./version.js";
+import { ENGINES_NODE, VERSION } from "./version.js";
 import { debugLog } from "./debug.js";
 
 // ─── Time Ago Utility ─────────────────────────────────────────────────────────
@@ -541,7 +541,7 @@ program
   .description("Run system diagnostics and verify MCP editor configurations")
   .action(() => {
     console.log(`\n${compactMark()} ${highlight("Local Brain Doctor")}\n`);
-    console.log(`  ${label("Node.js", 18)} ${process.version} (>=20.0.0 required)`);
+    console.log(`  ${label("Node.js", 18)} ${process.version} (${ENGINES_NODE} required)`);
     console.log(`  ${label("Platform", 18)} ${process.platform} (${process.arch})`);
     console.log(`  ${label("Detected Agent", 18)} ${detectAgent()}`);
     console.log(`  ${label("Project ID", 18)} ${getProjectId()}`);

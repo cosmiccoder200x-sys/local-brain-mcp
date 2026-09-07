@@ -22,7 +22,7 @@ platforms, but if yours is missing it falls back to compiling from source.
 
 ### `EBADENGINE` / engine warnings on install
 
-Local Brain requires **Node.js >= 18.0.0**. Check yours with `node --version`
+Local Brain requires **Node.js >= 22.0.0**. Check yours with `node --version`
 and upgrade via [nodejs.org](https://nodejs.org/) or a version manager (`nvm`,
 `fnm`, `volta`). CI tests Node 22.x and 24.x.
 
