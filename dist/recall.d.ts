@@ -11,9 +11,9 @@
  *  ✅ Monorepo package scoping and file provenance
  *  ✅ Fast fallback to structured keyword search if vector matches are sparse
  */
-import Database from 'better-sqlite3';
-import type { Memory, MemoryCategory } from './db.js';
-export declare const MAX_RESPONSE_TOKENS = 250;
+import Database from "better-sqlite3";
+import type { Memory, MemoryCategory } from "./db.js";
+export { MAX_RESPONSE_TOKENS } from "./config.js";
 export interface RecallOptions {
     query: string;
     file_path?: string;
@@ -61,6 +61,10 @@ export interface ScoredMemory extends Memory {
  * Calculates recency score [0.0 - 1.0] from a timestamp string.
  */
 export declare function calculateFreshness(dateString: string): number;
+/**
+ * Simplified scoring function for external callers and tests.
+ * The active recall path uses computeRankScore instead.
+ */
 export declare function computeFinalScore(similarity: number, category: string, createdAt: string, importance?: number, confidence?: number): {
     finalScore: number;
 };

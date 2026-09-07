@@ -433,6 +433,66 @@ code, pre {
   flex-wrap: wrap;
 }
 
+/* ─── Hero Install Bar ────────────────────────────────────────── */
+
+.hero-install {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  max-width: 560px;
+  margin: 0 auto 10px;
+  padding: 12px 12px 12px 20px;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  color: var(--text-main);
+  background: #090d16;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.hero-install-prompt {
+  color: var(--cyan);
+  user-select: none;
+}
+
+.hero-install code {
+  flex: 1;
+  text-align: left;
+  white-space: nowrap;
+  overflow-x: auto;
+}
+
+.hero-install-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-main);
+  background: rgba(6, 182, 212, 0.12);
+  border: 1px solid rgba(6, 182, 212, 0.35);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.hero-install-copy:hover {
+  background: rgba(6, 182, 212, 0.22);
+}
+
+.hero-install-note {
+  margin: 0 auto 28px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.hero-install-note a {
+  color: var(--cyan);
+}
+
 /* ─── Hero Terminal Window ──────────────────────────────────────── */
 
 .terminal-window {

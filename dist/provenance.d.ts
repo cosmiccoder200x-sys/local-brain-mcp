@@ -8,9 +8,9 @@
  *  - AGENT_IDS            — canonical agent identifier set
  */
 export declare const AGENT_IDS: readonly ["claude-code", "cursor", "antigravity", "copilot", "windsurf", "unknown"];
-export type AgentId = typeof AGENT_IDS[number] | string;
+export type AgentId = (typeof AGENT_IDS)[number] | string;
 export declare const IMPORTANCE_LEVELS: readonly ["low", "medium", "high", "critical"];
-export type ImportanceLevel = typeof IMPORTANCE_LEVELS[number];
+export type ImportanceLevel = (typeof IMPORTANCE_LEVELS)[number];
 /**
  * Best-effort agent detection from environment variables.
  * Returns 'unknown' if no agent can be identified.

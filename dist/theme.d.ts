@@ -43,7 +43,7 @@ export declare function heading(text: string | number): string;
 export declare function label(name: string, width?: number): string;
 export declare function keyVal(name: string, val: string | number, labelWidth?: number): string;
 export declare function statusDot(status: string): string;
-export declare function badge(text: string, type?: 'brand' | 'success' | 'warning' | 'error' | 'muted'): string;
+export declare function badge(text: string, type?: "brand" | "success" | "warning" | "error" | "muted"): string;
 /**
  * Returns the compact Brain + Terminal mark.
  */

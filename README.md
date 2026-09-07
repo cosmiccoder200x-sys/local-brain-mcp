@@ -1,4 +1,45 @@
-# Local Brain MCP
+[![M8ven Score](https://m8ven.ai/badge/mcp/cosmiccoder200x-sys-local-brain-mcp-1eus5c)](https://m8ven.ai/mcp/cosmiccoder200x-sys-local-brain-mcp-1eus5c)
+[![local-brain-mcp MCP server](https://glama.ai/mcp/servers/cosmiccoder200x-sys/local-brain-mcp/badges/card.svg)](https://glama.ai/mcp/servers/cosmiccoder200x-sys/local-brain-mcp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
+[![Website](https://img.shields.io/badge/website-live-06B6D4.svg)](https://local-brain-mcp.vercel.app/)
+
+<p align="center">
+  <img src="assets/logo/local-brain.svg" width="120" height="120" alt="Local Brain MCP Logo" />
+</p>
+
+<h1 align="center">Local Brain MCP</h1>
+<p align="center"><b>Shared, local-first memory for AI coding agents.</b></p>
+
+<p align="center">
+  <a href="https://local-brain-mcp.vercel.app/">🌐 Official Website</a> •
+  <a href="#-installation">⚡ Installation</a> •
+  <a href="#-quick-start">🚀 Quick Start</a> •
+  <a href="#mcp-tools-reference-7-tools">🛠️ MCP Tools</a> •
+  <a href="#-multi-agent-architecture">👥 Multi-Agent</a>
+</p>
+
+## 📦 Installation
+
+Requires **Node.js >= 18.0.0**.
+
+```bash
+# Install globally
+npm install -g local-brain-mcp
+
+# Verify
+local-brain --version
+```
+
+No global install? Run it directly with npx:
+
+```bash
+npx -p local-brain-mcp local-brain --version
+```
+
+Then continue with [Quick Start](#quick-start) below (`local-brain init` → `ingest` → `status`).
+
+---
 
 > **Shared, local-first memory for AI coding agents.**
 

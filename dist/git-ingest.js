@@ -10,11 +10,12 @@
  *  ✅ EXTRACTS: author, branch, changed files list, confidence & importance ratings
  *  ✅ DEDUPLICATES: detects duplicate knowledge and merges provenance cleanly
  */
-import { simpleGit } from 'simple-git';
-import { embed } from './embeddings.js';
-import { insertMemory, findDuplicateMemory, mergeMemory, isCommitIngested, markCommitIngested, upsertFileSnapshot, } from './db.js';
-import { derivePackageScope } from './scoping.js';
-import { evaluateMemoryQuality } from './quality.js';
+import { simpleGit } from "simple-git";
+import { embed } from "./embeddings.js";
+import { insertMemory, findDuplicateMemory, mergeMemory, isCommitIngested, markCommitIngested, upsertFileSnapshot, } from "./db.js";
+import { derivePackageScope } from "./scoping.js";
+import { evaluateMemoryQuality } from "./quality.js";
+import { debugLog } from "./debug.js";
 // ─── Filter Patterns ──────────────────────────────────────────────────────────
 /** Commits matching these patterns are SKIPPED (noise). */
 const IGNORE_PATTERNS = [
@@ -54,18 +55,18 @@ const INCLUDE_PATTERNS = [
 export function inferCategory(message) {
     const m = message.toLowerCase();
     if (/BREAKING CHANGE|!:/i.test(m))
-        return 'architecture';
+        return "architecture";
     if (/^fix|fixes?|bug|regression|hotfix|security/.test(m))
-        return 'fix';
+        return "fix";
     if (/^feat/.test(m))
-        return 'architecture';
+        return "architecture";
     if (/^refactor/.test(m))
-        return 'convention';
+        return "convention";
     if (/^perf/.test(m))
-        return 'fix';
+        return "fix";
     if (/^revert/.test(m))
-        return 'bug';
-    return 'convention';
+        return "bug";
+    return "convention";
 }
 export function inferImportance(message) {
     const m = message.toLowerCase();
@@ -82,42 +83,42 @@ export function inferImportance(message) {
     return 1.0;
 }
 function inferConfidenceAndImportance(message, category) {
-    let confidence = 0.90;
+    let confidence = 0.9;
     let importance = inferImportance(message);
     if (/BREAKING CHANGE|!:/i.test(message)) {
         confidence = 0.98;
-        importance = 1.80;
+        importance = 1.8;
     }
     else if (/fixes?\s+#\d+|resolves?\s+#\d+/i.test(message)) {
         confidence = 0.95;
-        importance = 1.30;
+        importance = 1.3;
     }
-    else if (category === 'fix') {
+    else if (category === "fix") {
         confidence = 0.92;
-        importance = 1.20;
+        importance = 1.2;
     }
-    else if (category === 'architecture') {
-        confidence = 0.90;
-        importance = 1.40;
+    else if (category === "architecture") {
+        confidence = 0.9;
+        importance = 1.4;
     }
     return { confidence, importance };
 }
 export function buildCommitSummary(commit) {
-    const files = commit.files ? commit.files.slice(0, 5).join(', ') : '';
-    const extraFiles = commit.files && commit.files.length > 5
-        ? ` (+${commit.files.length - 5} more)`
-        : '';
-    const diffSnippet = commit.diff ? commit.diff.slice(0, 500).trim() : '';
-    const isBreaking = /BREAKING CHANGE|!:/i.test(commit.message) ? '[BREAKING CHANGE] ' : '';
+    const files = commit.files ? commit.files.slice(0, 5).join(", ") : "";
+    const extraFiles = commit.files && commit.files.length > 5 ? ` (+${commit.files.length - 5} more)` : "";
+    const diffSnippet = commit.diff ? commit.diff.slice(0, 500).trim() : "";
+    const isBreaking = /BREAKING CHANGE|!:/i.test(commit.message) ? "[BREAKING CHANGE] " : "";
     return [
         `Commit: ${isBreaking}${commit.message.trim()}`,
-        files ? `Files: ${files}${extraFiles}` : '',
-        diffSnippet ? `Diff snippet:\n${diffSnippet}` : '',
-    ].filter(Boolean).join('\n');
+        files ? `Files: ${files}${extraFiles}` : "",
+        diffSnippet ? `Diff snippet:\n${diffSnippet}` : "",
+    ]
+        .filter(Boolean)
+        .join("\n");
 }
 // ─── Signal Filter ────────────────────────────────────────────────────────────
 export function isHighSignalCommit(message) {
-    if (!message || typeof message !== 'string')
+    if (!message || typeof message !== "string")
         return false;
     for (const pattern of IGNORE_PATTERNS) {
         if (pattern.test(message))
@@ -130,29 +131,31 @@ export function isHighSignalCommit(message) {
     return false;
 }
 export async function ingestGitHistory(db, options) {
-    const { repoPath, maxCommits = 500, since = '12 months ago', verbose = false, project, } = options;
+    const { repoPath, maxCommits = 500, since = "12 months ago", verbose = false, project } = options;
     const git = simpleGit(repoPath);
     const result = { scanned: 0, ingested: 0, skipped: 0, merged: 0, errors: 0 };
-    let currentRef = 'main';
+    let currentRef;
     try {
-        currentRef = (await git.revparse(['--abbrev-ref', 'HEAD'])).trim();
+        currentRef = (await git.revparse(["--abbrev-ref", "HEAD"])).trim();
     }
-    catch {
+    catch (e) {
         if (verbose)
-            console.error('[ingest] Not a git repository or no commits found.');
+            console.error("[ingest] Not a git repository or no commits found.");
+        debugLog("ingest", "Failed to get current ref: %s", e instanceof Error ? e.message : String(e));
         return result;
     }
-    let commits = [];
+    let commits;
     try {
         const log = await git.log({
             maxCount: maxCommits,
-            '--since': since,
+            "--since": since,
         });
         commits = log.all;
     }
     catch (err) {
         if (verbose)
-            console.error('[ingest] Failed to read git log:', err);
+            console.error("[ingest] Failed to read git log:", err);
+        debugLog("ingest", "Git log read failed: %s", err instanceof Error ? err.message : String(err));
         return result;
     }
     if (verbose)
@@ -161,7 +164,7 @@ export async function ingestGitHistory(db, options) {
         result.scanned++;
         const hash = commit.hash;
         const message = commit.message;
-        const author = commit.author_name || commit.author_email || 'unknown';
+        const author = commit.author_name || commit.author_email || "unknown";
         if (isCommitIngested(db, hash)) {
             result.skipped++;
             continue;
@@ -181,12 +184,12 @@ export async function ingestGitHistory(db, options) {
             continue;
         }
         try {
-            const diff = await git.diff([`${hash}^`, hash]).catch(() => '');
-            const showOut = await git.show(['--stat', '--format=', hash]).catch(() => '');
+            const diff = await git.diff([`${hash}^`, hash]).catch(() => "");
+            const showOut = await git.show(["--stat", "--format=", hash]).catch(() => "");
             const changedFiles = showOut
-                .split('\n')
-                .filter((l) => l.includes('|'))
-                .map((l) => l.split('|')[0]?.trim() ?? '')
+                .split("\n")
+                .filter((l) => l.includes("|"))
+                .map((l) => l.split("|")[0]?.trim() ?? "")
                 .filter(Boolean);
             const commitData = {
                 hash,
@@ -202,7 +205,7 @@ export async function ingestGitHistory(db, options) {
             const packageScope = derivePackageScope(primaryFile);
             const { confidence, importance } = inferConfidenceAndImportance(message, category);
             // Check for duplicate knowledge in DB
-            const dup = findDuplicateMemory(db, embedding, message, primaryFile, 0.90);
+            const dup = findDuplicateMemory(db, embedding, message, primaryFile, 0.9);
             if (dup) {
                 mergeMemory(db, dup.match.id, {
                     category,
@@ -223,9 +226,10 @@ export async function ingestGitHistory(db, options) {
             if (primaryFile) {
                 try {
                     const content = await git.show([`${hash}:${primaryFile}`]);
-                    lineCount = content.split('\n').length;
+                    lineCount = content.split("\n").length;
                 }
-                catch {
+                catch (e) {
+                    debugLog("ingest", "Failed to get line count for %s: %s", primaryFile, e instanceof Error ? e.message : String(e));
                     lineCount = 0;
                 }
             }
@@ -244,8 +248,8 @@ export async function ingestGitHistory(db, options) {
                 confidence,
                 importance,
                 quality_score: quality.score,
-                status: 'active',
-                source: 'git-ingest',
+                status: "active",
+                source: "git-ingest",
                 token_count: Math.ceil(summary.length / 4),
             }, embedding);
             if (primaryFile) {
@@ -273,10 +277,12 @@ export async function ingestSingleCommit(db, repoPath, hash) {
         const commit = log.all[0];
         if (!isHighSignalCommit(commit.message))
             return false;
+        // Use the commit's date as the since filter to find exactly this commit
+        const commitDate = commit.date;
         const result = await ingestGitHistory(db, {
             repoPath,
             maxCommits: 1,
-            since: '1 day ago',
+            since: commitDate,
         });
         return result.ingested > 0 || result.merged > 0;
     }

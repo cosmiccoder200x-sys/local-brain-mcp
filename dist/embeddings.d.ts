@@ -12,7 +12,7 @@
  *
  * Latency: < 0.2ms per embedding. 100% offline and deterministic.
  */
-export declare const EMBEDDING_DIM = 384;
+export { EMBEDDING_DIM } from "./config.js";
 /**
  * FNV-1a hash of a string, mapped to a bucket in [0, dim).
  */
