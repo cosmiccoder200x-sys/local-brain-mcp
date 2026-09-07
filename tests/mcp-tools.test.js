@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import readline from 'node:readline';
+import { VERSION } from '../dist/version.js';
 
 const serverPath = path.resolve('dist/mcp-server.js');
 let tempHome;
@@ -109,7 +110,7 @@ test('brain_status returns operational telemetry without leaking secrets', async
   assert.equal(result.isError, undefined);
   const text = textOf(result);
   assert.match(text, /Local Brain.*Status/);
-  assert.match(text, /Server Version:\s+v?1\.[12]\.0/);
+  assert.ok(text.includes(`Server Version: v${VERSION}`));
   assert.match(text, /Total Memories:/);
   assert.match(text, /Embedding Engine:/);
   assert.match(text, /Ranking:/);

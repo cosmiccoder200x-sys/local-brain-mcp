@@ -1,4 +1,4 @@
-# Local Brain MCP — Architecture (v1.2.0)
+# Local Brain MCP — Architecture (v1.3.0)
 
 Local Brain is a local-first, zero-external-dependency persistent memory infrastructure designed specifically for AI coding agents operating across multi-agent setups.
 

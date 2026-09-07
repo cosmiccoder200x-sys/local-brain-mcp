@@ -1,6 +1,6 @@
 {
   "name": "local-brain-mcp",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Shared, local-first memory layer for multi-agent software development (Claude Code, Cursor, Antigravity, Copilot & Windsurf)",
   "type": "module",
   "main": "dist/mcp-server.js",

@@ -3,6 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
 [![Website](https://img.shields.io/badge/website-live-06B6D4.svg)](https://local-brain-mcp.vercel.app/)
+[![CI](https://github.com/cosmiccoder200x-sys/local-brain-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/cosmiccoder200x-sys/local-brain-mcp/actions)
 
 <p align="center">
   <img src="assets/logo/local-brain.svg" width="120" height="120" alt="Local Brain MCP Logo" />
@@ -112,7 +113,7 @@ npx local-brain status
 PROJECT       retail-gem-quest
 MEMORY STORE  .local-brain/memory.db
 STATUS        ● ACTIVE
-VERSION       1.2.0
+VERSION       1.3.0
 
 MEMORIES      0
 LESSONS       0

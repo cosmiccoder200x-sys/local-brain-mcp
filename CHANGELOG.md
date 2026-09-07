@@ -5,6 +5,35 @@ All notable changes to `local-brain-mcp` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-09-07
+
+### Added
+- **Centralized configuration (`src/config.ts`)**: all ranking weights, similarity thresholds, token budgets, and staleness settings in one place with `LOCAL_BRAIN_*` environment variable overrides.
+- **Single source of truth for version (`src/version.ts`)**: CLI and MCP server now read the version from `package.json` at load time.
+- **DEBUG-gated logging (`src/debug.ts`)**: namespace-based debug output (`DEBUG=local-brain:*`) across db, ingest, recall, invalidation, mcp, cli, and provenance modules.
+- **ESLint + Prettier**: flat-config linting (`npm run lint`) and formatting (`npm run format` / `format:check`).
+- **53 new tests** (158 total): CLI utilities, config defaults/overrides, and extended `embedBatch` coverage.
+- **App-tile brand mark**: dark rounded-square logo with centered terminal prompt; light/dark-safe, legible at favicon size.
+- **Website install bar**: copy-paste `npm install -g local-brain-mcp` hero snippet with versioned asset URLs.
+- **PNG Open Graph image** (`public/og-image.png`) for X/Discord/Slack link previews that cannot render SVG.
+
+### Changed
+- Rebuilt website branding, accessibility (skip link, ARIA tabs/nav, reduced-motion), and mobile UX.
+- Fixed Vercel caching: unhashed images now use `must-revalidate` instead of `immutable`.
+- `engines` widened to Node `>=18.0.0` to match tested versions.
+- Build simplified to `tsc` only (removed broken `copy-schema.mjs` step referencing non-existent `src/schema.sql`).
+- Post-commit hook now resolves the CLI via `command -v`/local `node_modules` instead of `npm root -g`.
+- Copy-to-clipboard buttons debounce rapid clicks.
+- `ingestSingleCommit` filters by the target commit date instead of a hardcoded `1 day ago` window.
+
+### Fixed
+- 3 npm audit vulnerabilities (fast-uri, qs, uuid).
+- CLI `memories` command validates `--status` against an allowlist and bounds `--limit`.
+- Removed unused `VALID_PRUNE_STATUSES` constant and `readFileSync` import.
+
+### Removed
+- Dropped `copy-schema.mjs` build script (schema lives in `src/db.ts`).
+
 ## [1.2.0] - 2026-09-06
 
 ### Added
