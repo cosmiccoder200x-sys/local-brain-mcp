@@ -198,6 +198,84 @@
       </div>
     </section>
 
+    <!-- ─── Interactive Terminal / Code Section ────────────────────────── -->
+    <section class="section" id="install" aria-labelledby="install-heading">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-tag">Quick Start</span>
+          <h2 class="section-title" id="install-heading">Setup in under 30 seconds</h2>
+          <p class="section-desc">
+            Install from npm in seconds. Local Brain auto-detects installed editors and links MCP configurations automatically.
+          </p>
+        </div>
+
+        <div class="code-tabs-wrapper" role="region" aria-label="Code examples">
+          <div class="code-tabs-header">
+            <div class="code-tabs" role="tablist" aria-label="Code examples">
+              <button class="code-tab-btn active" data-tab="tab-quickstart" role="tab" aria-selected="true" aria-controls="tab-quickstart">1. Quickstart</button>
+              <button class="code-tab-btn" data-tab="tab-ingest" role="tab" aria-selected="false" aria-controls="tab-ingest">2. Ingest History</button>
+              <button class="code-tab-btn" data-tab="tab-query" role="tab" aria-selected="false" aria-controls="tab-query">3. Search Recall</button>
+              <button class="code-tab-btn" data-tab="tab-config" role="tab" aria-selected="false" aria-controls="tab-config">4. MCP Config</button>
+            </div>
+            <button class="btn-copy-tab" aria-label="Copy code to clipboard" data-copy-target="#tab-quickstart pre">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <span>Copy</span>
+            </button>
+          </div>
+
+          <!-- Panel 1 -->
+          <div class="code-panel active" id="tab-quickstart" role="tabpanel" aria-labelledby="tab-quickstart">
+            <pre><code><span style="color: var(--text-dim);"># Install globally from npm (requires Node.js ≥ 18)</span>
+<span style="color: var(--purple);">npm</span> install -g local-brain-mcp
+
+<span style="color: var(--text-dim);"># Navigate to your project and initialize Local Brain</span>
+<span style="color: var(--cyan);">cd</span> /path/to/your-repo
+ <span style="color: var(--purple);">local-brain</span> init
+
+<span style="color: var(--text-dim);"># Auto-detects Claude Code, Cursor, Antigravity, Copilot, Windsurf & Zed</span>
+<span style="color: var(--green);">✓ Local Brain initialized successfully</span></code></pre>
+          </div>
+
+          <!-- Panel 2 -->
+          <div class="code-panel" id="tab-ingest" role="tabpanel" aria-labelledby="tab-ingest">
+            <pre><code><span style="color: var(--text-dim);"># Ingest high-signal Git history into your local SQLite memory</span>
+<span style="color: var(--purple);">local-brain</span> ingest --since <span style="color: var(--cyan);">"12 months ago"</span> --commits <span style="color: var(--cyan);">500</span>
+
+<span style="color: var(--green);">✓ Ingest complete:</span>
+   Scanned:  348
+   Ingested: 42
+   Merged:   18</code></pre>
+          </div>
+
+          <!-- Panel 3 -->
+          <div class="code-panel" id="tab-query" role="tabpanel" aria-labelledby="tab-query">
+            <pre><code><span style="color: var(--text-dim);"># Query semantic memory directly from terminal</span>
+<span style="color: var(--purple);">local-brain</span> query <span style="color: var(--cyan);">"JWT token refresh edge runtime"</span>
+
+<span style="color: var(--cyan);">◈> Local Brain Recall</span>
+• [src/auth/jwt.ts] (fix [agent: cursor]): Use jose instead of jsonwebtoken for edge runtime
+  ⚡ Recall latency: 1.82 ms | Tokens: 48/250</code></pre>
+          </div>
+
+          <!-- Panel 4 -->
+          <div class="code-panel" id="tab-config" role="tabpanel" aria-labelledby="tab-config">
+            <pre><code><span style="color: var(--text-dim);">// Claude Code (.claude.json) or Cursor (.cursor/mcp.json)</span>
+{
+  <span style="color: var(--purple);">"mcpServers"</span>: {
+    <span style="color: var(--cyan);">"local-brain"</span>: {
+      <span style="color: var(--purple);">"command"</span>: <span style="color: #FFF;">"node"</span>,
+      <span style="color: var(--purple);">"args"</span>: [<span style="color: #FFF;">"/path/to/local-brain-mcp/dist/mcp-server.js"</span>]
+    }
+  }
+}</code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ─── Product Story ───────────────────────────────────────────────── -->
     <section class="section" id="story" aria-labelledby="story-heading">
       <div class="container">
@@ -548,84 +626,6 @@
               <div class="timeline-title" style="color: var(--green);">4. Recalled & Validated</div>
               <div class="timeline-desc">Next agent recalls the exact fix instantly</div>
             </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ─── Interactive Terminal / Code Section ────────────────────────── -->
-    <section class="section" id="install" aria-labelledby="install-heading">
-      <div class="container">
-        <div class="section-header">
-          <span class="section-tag">Quick Start</span>
-          <h2 class="section-title" id="install-heading">Setup in under 30 seconds</h2>
-          <p class="section-desc">
-            Install globally or run via npx. Local Brain auto-detects installed editors and links MCP configurations automatically.
-          </p>
-        </div>
-
-        <div class="code-tabs-wrapper" role="region" aria-label="Code examples">
-          <div class="code-tabs-header">
-            <div class="code-tabs" role="tablist" aria-label="Code examples">
-              <button class="code-tab-btn active" data-tab="tab-quickstart" role="tab" aria-selected="true" aria-controls="tab-quickstart">1. Quickstart</button>
-              <button class="code-tab-btn" data-tab="tab-ingest" role="tab" aria-selected="false" aria-controls="tab-ingest">2. Ingest History</button>
-              <button class="code-tab-btn" data-tab="tab-query" role="tab" aria-selected="false" aria-controls="tab-query">3. Search Recall</button>
-              <button class="code-tab-btn" data-tab="tab-config" role="tab" aria-selected="false" aria-controls="tab-config">4. MCP Config</button>
-            </div>
-            <button class="btn-copy-tab" aria-label="Copy code to clipboard" data-copy-target="#tab-quickstart pre">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-              </svg>
-              <span>Copy</span>
-            </button>
-          </div>
-
-          <!-- Panel 1 -->
-          <div class="code-panel active" id="tab-quickstart" role="tabpanel" aria-labelledby="tab-quickstart">
-            <pre><code><span style="color: var(--text-dim);"># Install globally from npm (requires Node.js ≥ 18)</span>
-<span style="color: var(--purple);">npm</span> install -g local-brain-mcp
-
-<span style="color: var(--text-dim);"># Navigate to your project and initialize Local Brain</span>
-<span style="color: var(--cyan);">cd</span> /path/to/your-repo
- <span style="color: var(--purple);">local-brain</span> init
-
-<span style="color: var(--text-dim);"># Auto-detects Claude Code, Cursor, Antigravity, Copilot, Windsurf & Zed</span>
-<span style="color: var(--green);">✓ Local Brain initialized successfully</span></code></pre>
-          </div>
-
-          <!-- Panel 2 -->
-          <div class="code-panel" id="tab-ingest" role="tabpanel" aria-labelledby="tab-ingest">
-            <pre><code><span style="color: var(--text-dim);"># Ingest high-signal Git history into your local SQLite memory</span>
-<span style="color: var(--purple);">local-brain</span> ingest --since <span style="color: var(--cyan);">"12 months ago"</span> --commits <span style="color: var(--cyan);">500</span>
-
-<span style="color: var(--green);">✓ Ingest complete:</span>
-   Scanned:  348
-   Ingested: 42
-   Merged:   18</code></pre>
-          </div>
-
-          <!-- Panel 3 -->
-          <div class="code-panel" id="tab-query" role="tabpanel" aria-labelledby="tab-query">
-            <pre><code><span style="color: var(--text-dim);"># Query semantic memory directly from terminal</span>
-<span style="color: var(--purple);">local-brain</span> query <span style="color: var(--cyan);">"JWT token refresh edge runtime"</span>
-
-<span style="color: var(--cyan);">◈> Local Brain Recall</span>
-• [src/auth/jwt.ts] (fix [agent: cursor]): Use jose instead of jsonwebtoken for edge runtime
-  ⚡ Recall latency: 1.82 ms | Tokens: 48/250</code></pre>
-          </div>
-
-          <!-- Panel 4 -->
-          <div class="code-panel" id="tab-config" role="tabpanel" aria-labelledby="tab-config">
-            <pre><code><span style="color: var(--text-dim);">// Claude Code (.claude.json) or Cursor (.cursor/mcp.json)</span>
-{
-  <span style="color: var(--purple);">"mcpServers"</span>: {
-    <span style="color: var(--cyan);">"local-brain"</span>: {
-      <span style="color: var(--purple);">"command"</span>: <span style="color: #FFF;">"node"</span>,
-      <span style="color: var(--purple);">"args"</span>: [<span style="color: #FFF;">"/path/to/local-brain-mcp/dist/mcp-server.js"</span>]
-    }
-  }
-}</code></pre>
           </div>
         </div>
       </div>
