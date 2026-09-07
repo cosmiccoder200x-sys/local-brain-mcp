@@ -271,9 +271,17 @@ npm run eval         # Evaluate MRR@5 and Precision@3 against benchmark dataset
 
 ---
 
+## Troubleshooting
+
+Stuck? See [docs/troubleshooting.md](docs/troubleshooting.md) for installation,
+editor integration, recall, and git-hook fixes — or run with `DEBUG=local-brain:*`
+for namespaced debug output.
+
+---
+
 ## Contributing
 
-Local Brain MCP is published under the permissive MIT License. Contributions, issue reports, and integrations are welcome.
+Local Brain MCP is published under the permissive MIT License. Contributions, issue reports, and integrations are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev setup and PR guidelines.
 
 ---
 
