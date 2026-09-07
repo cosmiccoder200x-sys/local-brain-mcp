@@ -1,3 +1,5 @@
+[![M8ven Score](https://m8ven.ai/badge/mcp/cosmiccoder200x-sys-local-brain-mcp-1eus5c)](https://m8ven.ai/mcp/cosmiccoder200x-sys-local-brain-mcp-1eus5c)
+[![local-brain-mcp MCP server](https://glama.ai/mcp/servers/cosmiccoder200x-sys/local-brain-mcp/badges/card.svg)](https://glama.ai/mcp/servers/cosmiccoder200x-sys/local-brain-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node Version](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen.svg)](https://nodejs.org/)
 [![Website](https://img.shields.io/badge/website-live-06B6D4.svg)](https://local-brain-mcp.vercel.app/)
