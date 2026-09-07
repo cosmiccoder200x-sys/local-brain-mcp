@@ -1,5 +1,3 @@
-[![M8ven Score](https://m8ven.ai/badge/mcp/cosmiccoder200x-sys-local-brain-mcp-1eus5c)](https://m8ven.ai/mcp/cosmiccoder200x-sys-local-brain-mcp-1eus5c)
-[![local-brain-mcp MCP server](https://glama.ai/mcp/servers/cosmiccoder200x-sys/local-brain-mcp/badges/card.svg)](https://glama.ai/mcp/servers/cosmiccoder200x-sys/local-brain-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node Version](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen.svg)](https://nodejs.org/)
 [![Website](https://img.shields.io/badge/website-live-06B6D4.svg)](https://local-brain-mcp.vercel.app/)
@@ -7,22 +5,67 @@
 [![npm version](https://img.shields.io/npm/v/local-brain-mcp.svg)](https://www.npmjs.com/package/local-brain-mcp)
 [![npm downloads](https://img.shields.io/npm/dm/local-brain-mcp.svg)](https://www.npmjs.com/package/local-brain-mcp)
 
-<p align="center">
-  <img src="assets/logo/local-brain.svg" width="120" height="120" alt="Local Brain MCP Logo" />
-</p>
-
 <h1 align="center">Local Brain MCP</h1>
-<p align="center"><b>Shared, local-first memory for AI coding agents.</b></p>
+<p align="center"><b>Persistent, local-first shared memory for AI coding agents.</b></p>
 
 <p align="center">
-  <a href="https://local-brain-mcp.vercel.app/">🌐 Official Website</a> •
-  <a href="#-installation">⚡ Installation</a> •
-  <a href="#-quick-start">🚀 Quick Start</a> •
-  <a href="#mcp-tools-reference-7-tools">🛠️ MCP Tools</a> •
-  <a href="#-multi-agent-architecture">👥 Multi-Agent</a>
+  <a href="https://local-brain-mcp.vercel.app/">Official Website</a> •
+  <a href="#installation">Installation</a> •
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#mcp-tools-reference-7-tools">MCP Tools</a> •
+  <a href="#multi-agent-architecture">Multi-Agent</a>
 </p>
 
-## 📦 Installation
+---
+
+> **Shared, local-first memory for AI coding agents.**
+
+Local Brain is a Model Context Protocol (MCP) server that indexes your repository's Git history and engineering decisions into an embedded SQLite vector database. Every recall runs in ~3 ms (p50, local benchmark). No network calls. No cloud dependencies.
+
+```
+Claude Code ─┐
+Cursor      ─┼── Local Brain ── Shared Project Memory
+Antigravity ─┤
+Copilot     ─┘
+Windsurf ───┘
+Zed         ─┘
+```
+
+When multiple coding assistants collaborate on the same repository, they share, validate, and evolve the same durable engineering memory — 100% offline, zero cloud egress, zero external database dependencies.
+
+---
+
+## Problem
+
+Standard AI memory tools have fundamental limitations:
+
+- **Network latency**: 150-800ms per recall when memory lives on a remote server
+- **Privacy**: Source code sent to foreign servers
+- **Context bloat**: Every session floods the context window
+- **Agent isolation**: Claude and Cursor operate in silos, each starting from zero
+- **Memory decay**: Outdated context from refactored code is never invalidated
+- **Noise**: WIP commits and typos pollute the knowledge base
+
+## Solution
+
+Local Brain MCP addresses each limitation:
+
+| Problem | How Local Brain MCP solves it |
+|---|---|
+| 150-800ms network latency per recall | ~3 ms p50 (5.7 ms p95, local 1k-memory benchmark) |
+| Source code sent to foreign servers | 100% on-device, zero egress, total privacy |
+| Context bloat on every session | Hard 250-token budget cap per recall |
+| Agent isolation (Claude vs Cursor silos) | Shared multi-agent memory with provenance |
+| Outdated context from refactored code | Git-diff invalidation marks old memories STALE |
+| Conflicting or outdated guidelines | Contradiction detection with 0.60x ranking penalty |
+| WIP/typo commits pollute memory | Quality filter keeps only high-signal lessons |
+| Monorepo noise across packages | Path-scoped queries, per-package namespacing |
+| Duplicate memories waste tokens | Smart deduplication and merge on ingest |
+| Decisions lost over time | Full memory lineage and trace across agents |
+
+---
+
+## Installation
 
 Requires **Node.js >= 22.0.0**.
 
@@ -34,39 +77,7 @@ npm install -g local-brain-mcp
 local-brain --version
 ```
 
-Then continue with [Quick Start](#quick-start) below (`local-brain init` → `ingest` → `status`).
-
----
-
-> **Shared, local-first memory for AI coding agents.**
-
-Local Brain is a high-performance [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that indexes your repository's Git history and AI engineering decisions into an embedded SQLite vector database.
-
-```
-Claude Code ─┐
-Cursor      ─┼── Local Brain ── Shared Project Memory
-Antigravity ─┤
-Copilot     ─┘
-```
-
-When multiple coding assistants (**Claude Code, Cursor, Antigravity, GitHub Copilot, Windsurf, Zed**) collaborate on the same repository, they share, validate, and evolve the same durable engineering memory—**100% offline, zero cloud egress, and zero external database dependencies.**
-
----
-
-## Key Advantages
-
-| Problem with standard AI memory tools | How Local Brain MCP solves it |
-|---|---|
-| 150–800ms network latency per recall | **~3 ms p50** (5.7 ms p95, local 1k-memory benchmark) |
-| Source code sent to foreign servers | **100% on-device**, zero egress, total privacy |
-| Context bloat on every session | **Hard 250-token budget cap** per recall |
-| Agent isolation (Claude vs Cursor silos) | **Shared multi-agent memory** with provenance |
-| Outdated context from refactored code | **Git-diff invalidation** marks old memories STALE |
-| Conflicting or outdated guidelines | **Contradiction detection** + 0.60x ranking penalty |
-| WIP/typo commits pollute memory | **Quality filter** keeps only high-signal lessons |
-| Monorepo noise across packages | **Path-scoped queries**, per-package namespacing |
-| Duplicate memories waste tokens | **Smart deduplication + merge** on ingest |
-| Decisions lost over time | **Full memory lineage & trace** across agents |
+Then continue with [Quick Start](#quick-start) below (`local-brain init` -> `ingest` -> `status`).
 
 ---
 
@@ -85,7 +96,7 @@ local-brain ingest
 # 4. Check multi-agent memory statistics
 local-brain status
 
-# 5. Start collaborating with Claude Code, Cursor, Antigravity, Copilot, or Windsurf!
+# 5. Start collaborating with Claude Code, Cursor, Antigravity, Copilot, Windsurf, or Zed
 ```
 
 ### CLI Experience
@@ -128,14 +139,14 @@ All tools carry complete MCP annotations (`readOnlyHint`, `destructiveHint`, `id
 Semantically search your codebase memory across all agents with multi-factor ranking and strict token capping.
 
 - **Annotations**: `readOnly: true`, `idempotent: true`
-- **Formula**: Semantic similarity (45%) + File scope (20%) + Recency decay (10%) + Confidence (10%) + Importance (5%) + Cross-agent validation (5%) + Quality score (5%) × Status multiplier × Contradiction penalty.
+- **Formula**: Semantic similarity (45%) + File scope (20%) + Recency decay (10%) + Confidence (10%) + Importance (5%) + Cross-agent validation (5%) + Quality score (5%) x Status multiplier x Contradiction penalty.
 
 **Parameters:**
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `query` | `string` | **Yes** | Natural language search query (e.g. `"JWT refresh token rotation"`). |
 | `file_path` | `string` | No | Repo-relative file path to focus search scope (e.g. `"src/auth/jwt.ts"`). |
-| `max_items` | `number` | No | Maximum memories to return (1–10, default: `5`). |
+| `max_items` | `number` | No | Maximum memories to return (1-10, default: `5`). |
 | `category` | `string` | No | Filter by category: `fix`, `architecture`, `convention`, `bug`, `manual`. |
 | `min_confidence` | `number` | No | Minimum confidence threshold (`0.0` to `1.0`). |
 | `include_deprecated` | `boolean` | No | Include stale and deprecated memories (default: `false`). |
@@ -207,7 +218,7 @@ Clean up stale or deprecated memories from the brain after major refactors.
 ## CLI Commands
 
 ```bash
-local-brain init                     # Auto-detect AI editors and install MCP configs
+local-brain init                       # Auto-detect AI editors and install MCP configs
 local-brain ingest [--commits 500]   # Ingest repository git history
 local-brain query "<text>"           # Test semantic recall directly in terminal
 local-brain learn "<lesson>"         # Store a manual lesson with optional --agent flag
@@ -218,7 +229,7 @@ local-brain status                   # Diagnostics and multi-agent breakdown
 local-brain doctor                   # System and editor configuration checker
 local-brain prune [--status stale]   # Remove stale or deprecated records
 local-brain forget [--id <id>]       # Delete or deprecate memories
-local-brain --no-color               # Disable color output
+local-brain --no-color               # Disable color output (global option)
 ```
 
 ---
@@ -237,13 +248,13 @@ local-brain --no-color               # Disable color output
                │  (stdio / WAL SQLite)   │
                └────────────┬────────────┘
                            ▼
-           ┌───────────────────────────────────┐
-           │        Shared Memory DB           │
-           │  • Multi-factor deterministic rank│
-           │  • Cross-agent validation boost   │
-           │  • Contradiction detection & pen. │
-           │  • Project & agent provenance     │
-           └───────────────────────────────────┘
+               ┌───────────────────────────────────┐
+               │        Shared Memory DB           │
+               │  • Multi-factor deterministic rank│
+               │  • Cross-agent validation boost   │
+               │  • Contradiction detection & penalty │
+               │  • Project & agent provenance     │
+               └───────────────────────────────────┘
 ```
 
 For detailed multi-agent documentation, see [docs/multi-agent.md](docs/multi-agent.md) and [docs/architecture.md](docs/architecture.md).
@@ -251,6 +262,8 @@ For detailed multi-agent documentation, see [docs/multi-agent.md](docs/multi-age
 **Memory is local.** Vercel does not host the local memory database. Each project's memory is scoped to its repository root under `.git/brain.db` (or `~/.config/local-brain/brain.db` when no repository root applies).
 
 **Agent identity is provenance.** Agents do not automatically share context unless Local Brain tools (`brain_learn`, `brain_recall`, `brain_validate`) are invoked via MCP.
+
+**Supported agents**: Claude Code, Cursor, Antigravity, GitHub Copilot, Windsurf, Zed. `local-brain init` auto-detects all six and writes their MCP configuration. Agents not found on the system are skipped.
 
 ---
 
@@ -265,7 +278,7 @@ Local Brain MCP requires Node.js **>= 22.0.0** (matching the `better-sqlite3` en
 ```bash
 npm run test         # Run complete test suite (unit, integration, multi-agent, concurrency)
 npm run typecheck    # Validate TypeScript types without emit
-npm run benchmark    # Measure retrieval latency & SQLite WAL throughput
+npm run benchmark    # Measure retrieval latency and SQLite WAL throughput
 npm run eval         # Evaluate MRR@5 and Precision@3 against benchmark dataset
 ```
 

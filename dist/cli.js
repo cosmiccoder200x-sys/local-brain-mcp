@@ -82,6 +82,11 @@ const EDITOR_TARGETS = [
         configPath: path.join(HOME, ".config", "zed", "settings.json"),
         key: "context_servers",
     },
+    {
+        name: "Antigravity",
+        configPath: path.join(HOME, ".config", "Antigravity", "settings.json"),
+        key: "mcpServers",
+    },
 ];
 function buildMcpEntry(serverPath) {
     return {

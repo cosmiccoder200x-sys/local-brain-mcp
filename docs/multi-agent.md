@@ -83,7 +83,7 @@ Software architectures evolve. When an agent learns a new rule that contradicts 
 4. **Transparency**: Recall outputs display a visible `⚠️ [CONTRADICTION DETECTED]` banner so agents and developers can review conflicting conventions.
 
 ### 4. Project Isolation
-Memory stores are scoped deterministically to your repository root. Different projects cannot leak context into one another. Each project has its own `.local-brain/memory.db` file.
+Memory stores are scoped deterministically to your repository root. Different projects cannot leak context into one another. Each project has its own `.git/brain.db` file.
 
 ### 5. Concurrency Safety with SQLite WAL
 Local Brain enables `PRAGMA journal_mode = WAL;` and `PRAGMA synchronous = NORMAL;`.

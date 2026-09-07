@@ -7,7 +7,7 @@ Thank you for your interest in contributing to `local-brain-mcp`! We welcome bug
 ## Development Setup
 
 ### Prerequisites
-- **Node.js**: `>= 18.0.0`
+- **Node.js**: `>= 22.0.0`
 - **npm**: `>= 9.0.0`
 - **Git**: `>= 2.30.0`
 
