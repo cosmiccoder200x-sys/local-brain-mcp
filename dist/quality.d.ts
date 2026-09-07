@@ -5,7 +5,7 @@
  * high-signal engineering knowledge while rejecting ephemeral shell commands,
  * raw debug logs, and trivial noise.
  */
-import type { MemoryCategory, ImportanceLevel } from './db.js';
+import type { MemoryCategory, ImportanceLevel } from "./db.js";
 export interface QualityAssessment {
     isQuality: boolean;
     score: number;

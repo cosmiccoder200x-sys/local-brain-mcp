@@ -177,6 +177,8 @@ function initCopyButtons() {
   const copyButtons = document.querySelectorAll('[data-copy-target], .btn-copy-tab');
 
   copyButtons.forEach(btn => {
+    let activeTimeout = null;
+
     btn.addEventListener('click', async () => {
       let textToCopy = '';
 
@@ -196,9 +198,9 @@ function initCopyButtons() {
 
       try {
         await navigator.clipboard.writeText(textToCopy);
-        showCopySuccess(btn);
+        showCopySuccess(btn, activeTimeout);
       } catch (err) {
-        showCopyFailure(btn);
+        showCopyFailure(btn, activeTimeout);
       }
     });
 
@@ -212,21 +214,23 @@ function initCopyButtons() {
   });
 }
 
-function showCopySuccess(btn) {
+function showCopySuccess(btn, existingTimeout) {
+  if (existingTimeout) clearTimeout(existingTimeout);
   const originalText = btn.innerHTML;
   btn.classList.add('copy-success');
   btn.innerHTML = '<span class="copy-feedback">✓ Copied</span>';
-  setTimeout(() => {
+  btn._copyTimeout = setTimeout(() => {
     btn.classList.remove('copy-success');
     btn.innerHTML = originalText;
   }, 2000);
 }
 
-function showCopyFailure(btn) {
+function showCopyFailure(btn, existingTimeout) {
+  if (existingTimeout) clearTimeout(existingTimeout);
   const originalText = btn.innerHTML;
   btn.classList.add('copy-failure');
   btn.innerHTML = '<span class="copy-feedback">✕ Failed</span>';
-  setTimeout(() => {
+  btn._copyTimeout = setTimeout(() => {
     btn.classList.remove('copy-failure');
     btn.innerHTML = originalText;
   }, 2000);

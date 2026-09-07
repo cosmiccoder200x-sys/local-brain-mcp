@@ -17,36 +17,36 @@ export function isColorSupported() {
         return explicitColorOverride;
     }
     // Check command line arguments for --no-color
-    if (typeof process !== 'undefined' && process.argv) {
-        if (process.argv.includes('--no-color'))
+    if (typeof process !== "undefined" && process.argv) {
+        if (process.argv.includes("--no-color"))
             return false;
-        if (process.argv.includes('--color'))
+        if (process.argv.includes("--color"))
             return true;
     }
     // Check standard environment variables
-    if (typeof process !== 'undefined' && process.env) {
-        if (process.env.NO_COLOR !== undefined && process.env.NO_COLOR !== '')
+    if (typeof process !== "undefined" && process.env) {
+        if (process.env.NO_COLOR !== undefined && process.env.NO_COLOR !== "")
             return false;
-        if (process.env.NODE_DISABLE_COLORS === '1')
+        if (process.env.NODE_DISABLE_COLORS === "1")
             return false;
-        if (process.env.FORCE_COLOR !== undefined && process.env.FORCE_COLOR !== '0')
+        if (process.env.FORCE_COLOR !== undefined && process.env.FORCE_COLOR !== "0")
             return true;
-        if (process.env.TERM === 'dumb')
+        if (process.env.TERM === "dumb")
             return false;
     }
     // Check if stdout is an interactive terminal
-    if (typeof process !== 'undefined' && process.stdout) {
+    if (typeof process !== "undefined" && process.stdout) {
         return Boolean(process.stdout.isTTY);
     }
     return false;
 }
 // ─── ANSI Code Utilities ─────────────────────────────────────────────────────
-const ESC = '\x1b[';
+const ESC = "\x1b[";
 const RESET = `${ESC}0m`;
 function wrap(open, close = RESET) {
     return (text) => {
         if (!isColorSupported() || text === undefined || text === null)
-            return String(text ?? '');
+            return String(text ?? "");
         return `${open}${text}${close}`;
     };
 }
@@ -100,16 +100,16 @@ export function gradient(text, stops = BRAND_STOPS) {
     if (!isColorSupported() || !str)
         return str;
     // Strip ANSI sequences when computing string length to avoid distortion
-    const clean = str.replace(/\x1b\[[0-9;]*m/g, '');
+    const clean = str.replace(/\x1b\[[0-9;]*m/g, "");
     if (clean.length === 0)
         return str;
-    let result = '';
+    let result = "";
     let cleanIndex = 0;
     for (let i = 0; i < str.length; i++) {
         const char = str[i];
         // Check if inside ANSI escape sequence
-        if (char === '\x1b') {
-            const end = str.indexOf('m', i);
+        if (char === "\x1b") {
+            const end = str.indexOf("m", i);
             if (end !== -1) {
                 result += str.slice(i, end + 1);
                 i = end;
@@ -160,30 +160,35 @@ export function keyVal(name, val, labelWidth = 14) {
 }
 // ─── Status & Badges ─────────────────────────────────────────────────────────
 export function statusDot(status) {
-    const s = (status || '').toLowerCase();
-    if (s === 'active') {
-        return isColorSupported() ? `${green('●')} ${green('ACTIVE')}` : '● ACTIVE';
+    const s = (status || "").toLowerCase();
+    if (s === "active") {
+        return isColorSupported() ? `${green("●")} ${green("ACTIVE")}` : "● ACTIVE";
     }
-    if (s === 'stale') {
-        return isColorSupported() ? `${yellow('●')} ${yellow('STALE')}` : '● STALE';
+    if (s === "stale") {
+        return isColorSupported() ? `${yellow("●")} ${yellow("STALE")}` : "● STALE";
     }
-    if (s === 'deprecated') {
-        return isColorSupported() ? `${gray('○')} ${gray('DEPRECATED')}` : '○ DEPRECATED';
+    if (s === "deprecated") {
+        return isColorSupported() ? `${gray("○")} ${gray("DEPRECATED")}` : "○ DEPRECATED";
     }
-    if (s === 'idle') {
-        return isColorSupported() ? `${gray('○')} ${gray('idle')}` : '○ idle';
+    if (s === "idle") {
+        return isColorSupported() ? `${gray("○")} ${gray("idle")}` : "○ idle";
     }
-    return isColorSupported() ? `${cyan('●')} ${status.toUpperCase()}` : `● ${status.toUpperCase()}`;
+    return isColorSupported() ? `${cyan("●")} ${status.toUpperCase()}` : `● ${status.toUpperCase()}`;
 }
-export function badge(text, type = 'brand') {
+export function badge(text, type = "brand") {
     if (!isColorSupported())
         return `[${text}]`;
     switch (type) {
-        case 'brand': return `${ESC}38;2;168;85;247m[${RESET}${cyan(text)}${ESC}38;2;168;85;247m]${RESET}`;
-        case 'success': return `${green('[')}${brightWhite(text)}${green(']')}`;
-        case 'warning': return `${yellow('[')}${brightWhite(text)}${yellow(']')}`;
-        case 'error': return `${red('[')}${brightWhite(text)}${red(']')}`;
-        case 'muted': return `${gray('[')}${dim(text)}${gray(']')}`;
+        case "brand":
+            return `${ESC}38;2;168;85;247m[${RESET}${cyan(text)}${ESC}38;2;168;85;247m]${RESET}`;
+        case "success":
+            return `${green("[")}${brightWhite(text)}${green("]")}`;
+        case "warning":
+            return `${yellow("[")}${brightWhite(text)}${yellow("]")}`;
+        case "error":
+            return `${red("[")}${brightWhite(text)}${red("]")}`;
+        case "muted":
+            return `${gray("[")}${dim(text)}${gray("]")}`;
     }
 }
 // ─── Brain + Terminal Visual Identity ────────────────────────────────────────
@@ -192,7 +197,7 @@ export function badge(text, type = 'brand') {
  */
 export function compactMark() {
     if (!isColorSupported())
-        return '◈>';
+        return "◈>";
     return `${ESC}38;2;168;85;247m◈${ESC}38;2;6;182;212m>${RESET}`;
 }
 /**
@@ -200,19 +205,13 @@ export function compactMark() {
  * Left side represents neural/synapse connections; right side represents terminal `>_`.
  */
 export function brainAsciiArt() {
-    return [
-        '   ╭──────╮   ',
-        ' ╭─╯ ╷  ╷ ╰─╮ ',
-        ' │ ●─┼──┼─ >_ ',
-        ' ╰─╮ ╵  ╵ ╭─╯ ',
-        '   ╰──────╯   ',
-    ];
+    return ["   ╭──────╮   ", " ╭─╯ ╷  ╷ ╰─╮ ", " │ ●─┼──┼─ >_ ", " ╰─╮ ╵  ╵ ╭─╯ ", "   ╰──────╯   "];
 }
 /**
  * Strips ANSI color codes for accurate width calculation.
  */
 export function stripAnsi(str) {
-    return str.replace(/\x1b\[[0-9;]*m/g, '');
+    return str.replace(/\x1b\[[0-9;]*m/g, "");
 }
 /**
  * Centers text within a given width, taking ANSI escape codes into account.
@@ -223,20 +222,20 @@ export function centerText(text, width) {
         return text;
     const leftPad = Math.floor((width - visibleLen) / 2);
     const rightPad = width - visibleLen - leftPad;
-    return ' '.repeat(leftPad) + text + ' '.repeat(rightPad);
+    return " ".repeat(leftPad) + text + " ".repeat(rightPad);
 }
 /**
  * Creates a rounded, framed terminal card with the given lines.
  */
 export function card(lines, innerWidth = 52) {
-    const topBorder = `╭${'─'.repeat(innerWidth)}╮`;
-    const bottomBorder = `╰${'─'.repeat(innerWidth)}╯`;
-    const emptyLine = `│${' '.repeat(innerWidth)}│`;
+    const topBorder = `╭${"─".repeat(innerWidth)}╮`;
+    const bottomBorder = `╰${"─".repeat(innerWidth)}╯`;
+    const emptyLine = `│${" ".repeat(innerWidth)}│`;
     const border = isColorSupported() ? gray : (s) => s;
-    const formattedLines = lines.map(line => {
+    const formattedLines = lines.map((line) => {
         const visibleLen = stripAnsi(line).length;
         const padding = Math.max(0, innerWidth - visibleLen);
-        return `${border('│')}${line}${' '.repeat(padding)}${border('│')}`;
+        return `${border("│")}${line}${" ".repeat(padding)}${border("│")}`;
     });
     return [
         border(topBorder),
@@ -244,23 +243,23 @@ export function card(lines, innerWidth = 52) {
         ...formattedLines,
         border(emptyLine),
         border(bottomBorder),
-    ].join('\n');
+    ].join("\n");
 }
 /**
  * Builds the hero banner card with Brain + Terminal logo, title, and subtitle.
  */
 export function headerBanner() {
     const innerWidth = 52;
-    const art = brainAsciiArt().map(l => gradient(l));
+    const art = brainAsciiArt().map((l) => gradient(l));
     const title = isColorSupported()
-        ? `${ESC}1m${brightWhite('Local Brain MCP')}${RESET}`
-        : 'Local Brain MCP';
+        ? `${ESC}1m${brightWhite("Local Brain MCP")}${RESET}`
+        : "Local Brain MCP";
     const subtitle = isColorSupported()
         ? `${ESC}90mShared Memory for AI Coding Agents${RESET}`
-        : 'Shared Memory for AI Coding Agents';
+        : "Shared Memory for AI Coding Agents";
     const lines = [
-        ...art.map(l => centerText(l, innerWidth)),
-        centerText('', innerWidth),
+        ...art.map((l) => centerText(l, innerWidth)),
+        centerText("", innerWidth),
         centerText(title, innerWidth),
         centerText(subtitle, innerWidth),
     ];

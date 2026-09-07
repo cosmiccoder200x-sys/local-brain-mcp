@@ -5,10 +5,9 @@
  * rewritten (>30% line changes) or deleted since the memory was recorded,
  * the memory is automatically marked as STALE so it stops appearing in recalls.
  */
-import Database from 'better-sqlite3';
-import type { SimpleGit } from 'simple-git';
-/** If a file changes more than this fraction since the memory was stored, invalidate. */
-export declare const STALE_CHANGE_THRESHOLD = 0.3;
+import Database from "better-sqlite3";
+import type { SimpleGit } from "simple-git";
+export { STALE_CHANGE_THRESHOLD } from "./config.js";
 /**
  * Count insertions and deletions in a git diff output string.
  */

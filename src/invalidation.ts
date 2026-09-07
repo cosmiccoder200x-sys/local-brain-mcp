@@ -6,20 +6,20 @@
  * the memory is automatically marked as STALE so it stops appearing in recalls.
  */
 
-import Database from 'better-sqlite3';
-import type { SimpleGit } from 'simple-git';
+import Database from "better-sqlite3";
+import type { SimpleGit } from "simple-git";
 import {
   getActiveMemoriesByFile,
   getFileSnapshot,
   markMemoryStale,
   upsertFileSnapshot,
-} from './db.js';
-import { sanitizeFilePath } from './scoping.js';
+} from "./db.js";
+import { sanitizeFilePath } from "./scoping.js";
+import { STALE_CHANGE_THRESHOLD } from "./config.js";
+import { debugLog } from "./debug.js";
 
-// ─── Threshold ────────────────────────────────────────────────────────────────
-
-/** If a file changes more than this fraction since the memory was stored, invalidate. */
-export const STALE_CHANGE_THRESHOLD = 0.30; // 30%
+// Re-export for backward compatibility with tests
+export { STALE_CHANGE_THRESHOLD } from "./config.js";
 
 // ─── Line-diff Calculator ─────────────────────────────────────────────────────
 
@@ -29,9 +29,9 @@ export const STALE_CHANGE_THRESHOLD = 0.30; // 30%
 export function parseDiffStats(diffOutput: string): { added: number; removed: number } {
   let added = 0;
   let removed = 0;
-  for (const line of diffOutput.split('\n')) {
-    if (line.startsWith('+') && !line.startsWith('+++')) added++;
-    if (line.startsWith('-') && !line.startsWith('---')) removed++;
+  for (const line of diffOutput.split("\n")) {
+    if (line.startsWith("+") && !line.startsWith("+++")) added++;
+    if (line.startsWith("-") && !line.startsWith("---")) removed++;
   }
   return { added, removed };
 }
@@ -51,7 +51,7 @@ export async function isFileStale(
   if (!sanitized) return true;
 
   try {
-    const diff = await git.diff([oldHash, newHash, '--', sanitized]);
+    const diff = await git.diff([oldHash, newHash, "--", sanitized]);
     if (!diff.trim()) return false; // no change
 
     const { added, removed } = parseDiffStats(diff);
@@ -59,7 +59,13 @@ export async function isFileStale(
     const changeRatio = baseline > 0 ? totalChanges / baseline : 1.0;
 
     return changeRatio >= STALE_CHANGE_THRESHOLD;
-  } catch {
+  } catch (e) {
+    debugLog(
+      "invalidation",
+      "Git diff failed for %s: %s",
+      filePath,
+      e instanceof Error ? e.message : String(e)
+    );
     // If git diff fails (e.g. file deleted or commit gone), treat as stale
     return true;
   }
@@ -77,8 +83,14 @@ export async function getCurrentLineCount(
 
   try {
     const content = await git.show([`${headHash}:${sanitized}`]);
-    return content.split('\n').length;
-  } catch {
+    return content.split("\n").length;
+  } catch (e) {
+    debugLog(
+      "invalidation",
+      "Failed to get line count for %s: %s",
+      filePath,
+      e instanceof Error ? e.message : String(e)
+    );
     return 0; // file deleted or not found
   }
 }
@@ -86,8 +98,8 @@ export async function getCurrentLineCount(
 // ─── Main Invalidation Run ────────────────────────────────────────────────────
 
 export interface InvalidationResult {
-  checkedFiles:     number;
-  stalifiedCount:   number;
+  checkedFiles: number;
+  stalifiedCount: number;
   updatedSnapshots: number;
 }
 
@@ -100,25 +112,34 @@ export async function runInvalidationPass(
   git: SimpleGit
 ): Promise<InvalidationResult> {
   const result: InvalidationResult = {
-    checkedFiles:     0,
-    stalifiedCount:   0,
+    checkedFiles: 0,
+    stalifiedCount: 0,
     updatedSnapshots: 0,
   };
 
   let headHash: string;
   try {
-    headHash = (await git.revparse(['HEAD'])).trim();
-  } catch {
+    headHash = (await git.revparse(["HEAD"])).trim();
+  } catch (e) {
+    debugLog(
+      "invalidation",
+      "Failed to get HEAD hash: %s",
+      e instanceof Error ? e.message : String(e)
+    );
     // Not a git repo or no commits yet
     return result;
   }
 
   // Collect unique file paths with active memories
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT DISTINCT file_path, files, commit_hash
     FROM memories
     WHERE status = 'active' AND commit_hash IS NOT NULL
-  `).all() as Array<{ file_path: string | null; files: string | null; commit_hash: string }>;
+  `
+    )
+    .all() as Array<{ file_path: string | null; files: string | null; commit_hash: string }>;
 
   const checkedPaths = new Set<string>();
 
@@ -130,12 +151,18 @@ export async function runInvalidationPass(
         const parsed = JSON.parse(row.files);
         if (Array.isArray(parsed)) {
           for (const f of parsed) {
-            if (typeof f === 'string' && !candidateFiles.includes(f)) {
+            if (typeof f === "string" && !candidateFiles.includes(f)) {
               candidateFiles.push(f);
             }
           }
         }
-      } catch { /* ignore */ }
+      } catch (e) {
+        debugLog(
+          "invalidation",
+          "Failed to parse files JSON: %s",
+          e instanceof Error ? e.message : String(e)
+        );
+      }
     }
 
     for (const filePath of candidateFiles) {
@@ -146,7 +173,7 @@ export async function runInvalidationPass(
       if (row.commit_hash === headHash) continue; // memory is current
 
       const snapshot = getFileSnapshot(db, filePath);
-      const baseline  = snapshot?.line_count ?? 0;
+      const baseline = snapshot?.line_count ?? 0;
 
       const stale = await isFileStale(git, filePath, row.commit_hash, headHash, baseline);
 
@@ -181,8 +208,13 @@ export async function invalidateFile(
 
   let headHash: string;
   try {
-    headHash = (await git.revparse(['HEAD'])).trim();
-  } catch {
+    headHash = (await git.revparse(["HEAD"])).trim();
+  } catch (e) {
+    debugLog(
+      "invalidation",
+      "Failed to get HEAD hash in invalidateFile: %s",
+      e instanceof Error ? e.message : String(e)
+    );
     return 0;
   }
 

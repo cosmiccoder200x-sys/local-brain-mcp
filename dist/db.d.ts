@@ -4,13 +4,13 @@
  * Uses better-sqlite3 for synchronous SQLite access. Vector embeddings are
  * stored directly as Float32Array BLOBs for fast zero-dependency local search.
  */
-import Database from 'better-sqlite3';
-import type { AgentId, ImportanceLevel } from './provenance.js';
-export type { AgentId, ImportanceLevel } from './provenance.js';
+import Database from "better-sqlite3";
+import type { AgentId, ImportanceLevel } from "./provenance.js";
+export type { AgentId, ImportanceLevel } from "./provenance.js";
 export declare function resolveDbPath(repoRoot?: string): string;
-export type MemoryCategory = 'fix' | 'architecture' | 'convention' | 'bug' | 'manual';
-export type MemoryStatus = 'active' | 'stale' | 'deprecated';
-export type MemorySource = 'git-ingest' | 'manual' | 'session';
+export type MemoryCategory = "fix" | "architecture" | "convention" | "bug" | "manual";
+export type MemoryStatus = "active" | "stale" | "deprecated";
+export type MemorySource = "git-ingest" | "manual" | "session";
 export interface Memory {
     id: number;
     category: MemoryCategory;
@@ -111,12 +111,12 @@ export type InsertResult = {
 export declare function insertMemory(db: Database.Database, fields: InsertMemoryInput, embedding?: Float32Array): number;
 export declare function insertEmbedding(db: Database.Database, id: number, embedding: Float32Array): void;
 export declare function getMemoryById(db: Database.Database, id: number): Memory | null;
-export declare function updateMemory(db: Database.Database, id: number, fields: Partial<Omit<Memory, 'id' | 'created_at' | 'updated_at' | 'embedding'>>): boolean;
+export declare function updateMemory(db: Database.Database, id: number, fields: Partial<Omit<Memory, "id" | "created_at" | "updated_at" | "embedding">>): boolean;
 export declare function supersedeMemory(db: Database.Database, oldId: number, newId: number): void;
 export declare function markMemoryStale(db: Database.Database, id: number): void;
 export declare function markMemoryDeprecated(db: Database.Database, id: number): void;
 export declare function getActiveMemoriesByFile(db: Database.Database, filePath: string): Memory[];
-export declare function pruneByStatus(db: Database.Database, status: MemoryStatus | 'all'): number;
+export declare function pruneByStatus(db: Database.Database, status: MemoryStatus | "all"): number;
 export interface ForgetOptions {
     id?: number;
     filePath?: string;

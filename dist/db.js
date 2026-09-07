@@ -4,12 +4,14 @@
  * Uses better-sqlite3 for synchronous SQLite access. Vector embeddings are
  * stored directly as Float32Array BLOBs for fast zero-dependency local search.
  */
-import Database from 'better-sqlite3';
-import { mkdirSync } from 'fs';
-import os from 'os';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { cosineSimilarity } from './embeddings.js';
+import Database from "better-sqlite3";
+import { mkdirSync } from "fs";
+import os from "os";
+import path from "path";
+import { fileURLToPath } from "url";
+import { cosineSimilarity } from "./embeddings.js";
+import { VALIDATION_CONFIDENCE_BOOST, MAX_CONFIDENCE, DUPLICATE_SIMILARITY_THRESHOLD, CONTRADICTION_SIMILARITY_THRESHOLD, } from "./config.js";
+import { debugLog } from "./debug.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // ─── DB Path Resolution ────────────────────────────────────────────────────────
 export function resolveDbPath(repoRoot) {
@@ -17,10 +19,10 @@ export function resolveDbPath(repoRoot) {
         return path.resolve(process.env.LOCAL_BRAIN_DB_PATH);
     }
     if (repoRoot) {
-        return path.join(repoRoot, '.git', 'brain.db');
+        return path.join(repoRoot, ".git", "brain.db");
     }
-    const configDir = path.join(os.homedir(), '.config', 'local-brain');
-    return path.join(configDir, 'brain.db');
+    const configDir = path.join(os.homedir(), ".config", "local-brain");
+    return path.join(configDir, "brain.db");
 }
 // ─── Schema Migration ──────────────────────────────────────────────────────────
 /**
@@ -28,37 +30,66 @@ export function resolveDbPath(repoRoot) {
  * without data loss or table recreation.
  */
 export function migrateDb(db) {
-    const tableCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='memories'").get();
+    const tableCheck = db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='memories'")
+        .get();
     if (!tableCheck)
         return;
-    const existingColumns = new Set(db.prepare("PRAGMA table_info('memories')").all().map(c => c.name));
+    const existingColumns = new Set(db.prepare("PRAGMA table_info('memories')").all().map((c) => c.name));
     const migrations = [
-        { name: 'files', ddl: 'ALTER TABLE memories ADD COLUMN files TEXT' },
-        { name: 'author', ddl: 'ALTER TABLE memories ADD COLUMN author TEXT' },
-        { name: 'branch', ddl: 'ALTER TABLE memories ADD COLUMN branch TEXT' },
-        { name: 'project', ddl: 'ALTER TABLE memories ADD COLUMN project TEXT' },
-        { name: 'confidence', ddl: 'ALTER TABLE memories ADD COLUMN confidence REAL NOT NULL DEFAULT 1.0' },
-        { name: 'importance', ddl: 'ALTER TABLE memories ADD COLUMN importance REAL NOT NULL DEFAULT 1.0' },
-        { name: 'quality_score', ddl: 'ALTER TABLE memories ADD COLUMN quality_score REAL NOT NULL DEFAULT 1.0' },
-        { name: 'superseded_by', ddl: 'ALTER TABLE memories ADD COLUMN superseded_by INTEGER REFERENCES memories(id) ON DELETE SET NULL' },
-        { name: 'supersedes_id', ddl: 'ALTER TABLE memories ADD COLUMN supersedes_id INTEGER REFERENCES memories(id) ON DELETE SET NULL' },
-        { name: 'last_validated', ddl: 'ALTER TABLE memories ADD COLUMN last_validated DATETIME DEFAULT CURRENT_TIMESTAMP' },
+        { name: "files", ddl: "ALTER TABLE memories ADD COLUMN files TEXT" },
+        { name: "author", ddl: "ALTER TABLE memories ADD COLUMN author TEXT" },
+        { name: "branch", ddl: "ALTER TABLE memories ADD COLUMN branch TEXT" },
+        { name: "project", ddl: "ALTER TABLE memories ADD COLUMN project TEXT" },
+        {
+            name: "confidence",
+            ddl: "ALTER TABLE memories ADD COLUMN confidence REAL NOT NULL DEFAULT 1.0",
+        },
+        {
+            name: "importance",
+            ddl: "ALTER TABLE memories ADD COLUMN importance REAL NOT NULL DEFAULT 1.0",
+        },
+        {
+            name: "quality_score",
+            ddl: "ALTER TABLE memories ADD COLUMN quality_score REAL NOT NULL DEFAULT 1.0",
+        },
+        {
+            name: "superseded_by",
+            ddl: "ALTER TABLE memories ADD COLUMN superseded_by INTEGER REFERENCES memories(id) ON DELETE SET NULL",
+        },
+        {
+            name: "supersedes_id",
+            ddl: "ALTER TABLE memories ADD COLUMN supersedes_id INTEGER REFERENCES memories(id) ON DELETE SET NULL",
+        },
+        {
+            name: "last_validated",
+            ddl: "ALTER TABLE memories ADD COLUMN last_validated DATETIME DEFAULT CURRENT_TIMESTAMP",
+        },
         // Phase 3 — multi-agent provenance
-        { name: 'project_id', ddl: "ALTER TABLE memories ADD COLUMN project_id TEXT" },
-        { name: 'agent', ddl: "ALTER TABLE memories ADD COLUMN agent TEXT NOT NULL DEFAULT 'unknown'" },
-        { name: 'validated_by', ddl: 'ALTER TABLE memories ADD COLUMN validated_by TEXT' },
-        { name: 'validation_count', ddl: 'ALTER TABLE memories ADD COLUMN validation_count INTEGER NOT NULL DEFAULT 0' },
-        { name: 'contradiction_flag', ddl: 'ALTER TABLE memories ADD COLUMN contradiction_flag INTEGER NOT NULL DEFAULT 0' },
-        { name: 'contradiction_ids', ddl: 'ALTER TABLE memories ADD COLUMN contradiction_ids TEXT' },
-        { name: 'importance_level', ddl: "ALTER TABLE memories ADD COLUMN importance_level TEXT NOT NULL DEFAULT 'medium'" },
+        { name: "project_id", ddl: "ALTER TABLE memories ADD COLUMN project_id TEXT" },
+        { name: "agent", ddl: "ALTER TABLE memories ADD COLUMN agent TEXT NOT NULL DEFAULT 'unknown'" },
+        { name: "validated_by", ddl: "ALTER TABLE memories ADD COLUMN validated_by TEXT" },
+        {
+            name: "validation_count",
+            ddl: "ALTER TABLE memories ADD COLUMN validation_count INTEGER NOT NULL DEFAULT 0",
+        },
+        {
+            name: "contradiction_flag",
+            ddl: "ALTER TABLE memories ADD COLUMN contradiction_flag INTEGER NOT NULL DEFAULT 0",
+        },
+        { name: "contradiction_ids", ddl: "ALTER TABLE memories ADD COLUMN contradiction_ids TEXT" },
+        {
+            name: "importance_level",
+            ddl: "ALTER TABLE memories ADD COLUMN importance_level TEXT NOT NULL DEFAULT 'medium'",
+        },
     ];
     for (const { name, ddl } of migrations) {
         if (!existingColumns.has(name)) {
             try {
                 db.exec(ddl);
             }
-            catch {
-                // column may have already been added concurrently
+            catch (e) {
+                debugLog("db", "Migration column %s skipped (may already exist): %s", name, e instanceof Error ? e.message : String(e));
             }
         }
     }
@@ -78,8 +109,8 @@ export function migrateDb(db) {
       CREATE INDEX IF NOT EXISTS idx_memories_contradiction   ON memories(contradiction_flag);
     `);
     }
-    catch {
-        // ignore index creation race
+    catch (e) {
+        debugLog("db", "Index creation race (safe to ignore): %s", e instanceof Error ? e.message : String(e));
     }
 }
 export const BASE_SCHEMA_SQL = `
@@ -163,9 +194,9 @@ export function getDb(dbPath) {
         const db = new Database(resolvedPath);
         db.exec(BASE_SCHEMA_SQL);
         migrateDb(db);
-        db.pragma('journal_mode = WAL');
-        db.pragma('synchronous = NORMAL');
-        db.pragma('temp_store = MEMORY');
+        db.pragma("journal_mode = WAL");
+        db.pragma("synchronous = NORMAL");
+        db.pragma("temp_store = MEMORY");
         _defaultDb = db;
         _openDbs.add(db);
         return db;
@@ -176,9 +207,9 @@ export function getDb(dbPath) {
     const db = new Database(resolvedPath);
     db.exec(BASE_SCHEMA_SQL);
     migrateDb(db);
-    db.pragma('journal_mode = WAL');
-    db.pragma('synchronous = NORMAL');
-    db.pragma('temp_store = MEMORY');
+    db.pragma("journal_mode = WAL");
+    db.pragma("synchronous = NORMAL");
+    db.pragma("temp_store = MEMORY");
     _openDbs.add(db);
     return db;
 }
@@ -187,7 +218,9 @@ export function closeDb(targetDb) {
         try {
             targetDb.close();
         }
-        catch { /* ignore */ }
+        catch (e) {
+            debugLog("db", "Failed to close target DB: %s", e instanceof Error ? e.message : String(e));
+        }
         _openDbs.delete(targetDb);
         if (_defaultDb === targetDb)
             _defaultDb = null;
@@ -197,7 +230,9 @@ export function closeDb(targetDb) {
             try {
                 d.close();
             }
-            catch { /* ignore */ }
+            catch (e) {
+                debugLog("db", "Failed to close DB connection: %s", e instanceof Error ? e.message : String(e));
+            }
         }
         _openDbs.clear();
         _defaultDb = null;
@@ -239,17 +274,17 @@ export function insertMemory(db, fields, embedding) {
         branch: fields.branch ?? null,
         project: fields.project ?? null,
         project_id: fields.project_id ?? null,
-        agent: fields.agent ?? 'unknown',
+        agent: fields.agent ?? "unknown",
         validated_by: fields.validated_by ?? null,
         validation_count: fields.validation_count ?? 0,
         contradiction_flag: fields.contradiction_flag ?? 0,
         contradiction_ids: fields.contradiction_ids ?? null,
-        importance_level: fields.importance_level ?? 'medium',
-        confidence: typeof fields.confidence === 'number' ? Math.max(0, Math.min(1, fields.confidence)) : 1.0,
-        importance: typeof fields.importance === 'number' ? Math.max(0.1, Math.min(2.0, fields.importance)) : 1.0,
-        quality_score: typeof fields.quality_score === 'number' ? fields.quality_score : 1.0,
-        status: fields.status ?? 'active',
-        source: fields.source ?? 'git-ingest',
+        importance_level: fields.importance_level ?? "medium",
+        confidence: typeof fields.confidence === "number" ? Math.max(0, Math.min(1, fields.confidence)) : 1.0,
+        importance: typeof fields.importance === "number" ? Math.max(0.1, Math.min(2.0, fields.importance)) : 1.0,
+        quality_score: typeof fields.quality_score === "number" ? fields.quality_score : 1.0,
+        status: fields.status ?? "active",
+        source: fields.source ?? "git-ingest",
         superseded_by: fields.superseded_by ?? null,
         supersedes_id: fields.supersedes_id ?? null,
         last_validated: fields.last_validated ?? new Date().toISOString(),
@@ -265,10 +300,10 @@ export function insertMemory(db, fields, embedding) {
 }
 export function insertEmbedding(db, id, embedding) {
     const buffer = Buffer.from(embedding.buffer, embedding.byteOffset, embedding.byteLength);
-    db.prepare('UPDATE memories SET embedding = ? WHERE id = ?').run(buffer, id);
+    db.prepare("UPDATE memories SET embedding = ? WHERE id = ?").run(buffer, id);
 }
 export function getMemoryById(db, id) {
-    return db.prepare('SELECT * FROM memories WHERE id = ?').get(id) ?? null;
+    return db.prepare("SELECT * FROM memories WHERE id = ?").get(id) ?? null;
 }
 export function updateMemory(db, id, fields) {
     const updates = [];
@@ -281,7 +316,7 @@ export function updateMemory(db, id, fields) {
     }
     if (updates.length === 0)
         return false;
-    const sql = `UPDATE memories SET ${updates.join(', ')} WHERE id = @id`;
+    const sql = `UPDATE memories SET ${updates.join(", ")} WHERE id = @id`;
     const result = db.prepare(sql).run(params);
     return result.changes > 0;
 }
@@ -304,74 +339,84 @@ export function markMemoryDeprecated(db, id) {
     db.prepare("UPDATE memories SET status = 'deprecated' WHERE id = ?").run(id);
 }
 export function getActiveMemoriesByFile(db, filePath) {
-    return db.prepare(`
+    return db
+        .prepare(`
     SELECT * FROM memories
     WHERE (file_path = ? OR files LIKE ?) AND status = 'active'
     ORDER BY created_at DESC
-  `).all(filePath, `%"${filePath}"%`);
+  `)
+        .all(filePath, `%"${filePath}"%`);
 }
 export function pruneByStatus(db, status) {
     let stmt;
-    if (status === 'all') {
+    if (status === "all") {
         stmt = db.prepare("DELETE FROM memories WHERE status != 'active'");
     }
     else {
-        stmt = db.prepare('DELETE FROM memories WHERE status = ?');
+        stmt = db.prepare("DELETE FROM memories WHERE status = ?");
     }
-    const result = status === 'all' ? stmt.run() : stmt.run(status);
+    const result = status === "all" ? stmt.run() : stmt.run(status);
     return result.changes;
 }
 export function forgetMemory(db, options) {
     const { id, filePath, query, hardDelete = false } = options;
     let targetIds = [];
-    if (typeof id === 'number') {
+    if (typeof id === "number") {
         const row = getMemoryById(db, id);
         if (row)
             targetIds.push(row.id);
     }
     else if (filePath) {
-        const rows = db.prepare("SELECT id FROM memories WHERE file_path = ? OR files LIKE ?").all(filePath, `%"${filePath}"%`);
-        targetIds = rows.map(r => r.id);
+        const rows = db
+            .prepare("SELECT id FROM memories WHERE file_path = ? OR files LIKE ?")
+            .all(filePath, `%"${filePath}"%`);
+        targetIds = rows.map((r) => r.id);
     }
     else if (query) {
         const pattern = `%${query.trim()}%`;
-        const rows = db.prepare("SELECT id FROM memories WHERE content LIKE ? OR summary LIKE ?").all(pattern, pattern);
-        targetIds = rows.map(r => r.id);
+        const rows = db
+            .prepare("SELECT id FROM memories WHERE content LIKE ? OR summary LIKE ?")
+            .all(pattern, pattern);
+        targetIds = rows.map((r) => r.id);
     }
     if (targetIds.length === 0) {
         return { count: 0, affectedIds: [] };
     }
     if (hardDelete) {
-        const placeholders = targetIds.map(() => '?').join(',');
+        const placeholders = targetIds.map(() => "?").join(",");
         db.prepare(`DELETE FROM memories WHERE id IN (${placeholders})`).run(...targetIds);
     }
     else {
-        const placeholders = targetIds.map(() => '?').join(',');
+        const placeholders = targetIds.map(() => "?").join(",");
         db.prepare(`UPDATE memories SET status = 'deprecated', updated_at = CURRENT_TIMESTAMP WHERE id IN (${placeholders})`).run(...targetIds);
     }
     return { count: targetIds.length, affectedIds: targetIds };
 }
-export function findDuplicateMemory(db, embedding, content, filePath, similarityThreshold = 0.88) {
+export function findDuplicateMemory(db, embedding, content, filePath, similarityThreshold = DUPLICATE_SIMILARITY_THRESHOLD) {
     const cleanedContent = content.trim().toLowerCase();
     // 1. Exact match check
-    const exactRow = db.prepare(`
+    const exactRow = db
+        .prepare(`
     SELECT * FROM memories
     WHERE status = 'active'
       AND LOWER(TRIM(content)) = ?
-      ${filePath ? 'AND (file_path = ? OR file_path IS NULL)' : ''}
+      ${filePath ? "AND (file_path = ? OR file_path IS NULL)" : ""}
     LIMIT 1
-  `).get(...(filePath ? [cleanedContent, filePath] : [cleanedContent]));
+  `)
+        .get(...(filePath ? [cleanedContent, filePath] : [cleanedContent]));
     if (exactRow) {
         return { match: exactRow, similarity: 1.0, isExact: true };
     }
     // 2. Vector-based near duplicate check
     if (!embedding)
         return null;
-    const candidateRows = db.prepare(`
+    const candidateRows = db
+        .prepare(`
     SELECT * FROM memories
     WHERE status = 'active'
-      ${filePath ? 'AND (file_path = ? OR file_path IS NULL)' : ''}
-  `).all(...(filePath ? [filePath] : []));
+      ${filePath ? "AND (file_path = ? OR file_path IS NULL)" : ""}
+  `)
+        .all(...(filePath ? [filePath] : []));
     let bestMatch = null;
     let maxSim = -1;
     for (const row of candidateRows) {
@@ -395,15 +440,15 @@ export function mergeMemory(db, existingId, newFields) {
         return;
     const mergedConfidence = Math.max(existing.confidence, newFields.confidence ?? 1.0);
     const mergedImportance = Math.max(existing.importance, newFields.importance ?? 1.0);
-    const mergedSummary = newFields.summary.length > existing.summary.length
-        ? newFields.summary
-        : existing.summary;
+    const mergedSummary = newFields.summary.length > existing.summary.length ? newFields.summary : existing.summary;
     let existingFiles = [];
     try {
         if (existing.files)
             existingFiles = JSON.parse(existing.files);
     }
-    catch { /* ignore */ }
+    catch (e) {
+        debugLog("db", "Failed to parse existing files JSON for memory %d: %s", existingId, e instanceof Error ? e.message : String(e));
+    }
     if (newFields.file_path && !existingFiles.includes(newFields.file_path)) {
         existingFiles.push(newFields.file_path);
     }
@@ -420,7 +465,8 @@ export function mergeMemory(db, existingId, newFields) {
 }
 // ─── Stats & Ingestion ─────────────────────────────────────────────────────────
 export function getDbStats(db) {
-    const stats = db.prepare(`
+    const stats = db
+        .prepare(`
     SELECT
       COUNT(*) AS total,
       SUM(CASE WHEN status = 'active'                 THEN 1 ELSE 0 END) AS active,
@@ -432,13 +478,16 @@ export function getDbStats(db) {
       SUM(CASE WHEN validation_count > 0              THEN 1 ELSE 0 END) AS validated,
       SUM(CASE WHEN contradiction_flag = 1            THEN 1 ELSE 0 END) AS contradicted
     FROM memories
-  `).get();
-    const commits = db.prepare('SELECT COUNT(*) AS c FROM ingested_commits').get();
-    const snapshots = db.prepare('SELECT COUNT(*) AS c FROM file_snapshots').get();
-    const agentRows = db.prepare(`SELECT agent, COUNT(*) AS cnt FROM memories GROUP BY agent`).all();
+  `)
+        .get();
+    const commits = db.prepare("SELECT COUNT(*) AS c FROM ingested_commits").get();
+    const snapshots = db.prepare("SELECT COUNT(*) AS c FROM file_snapshots").get();
+    const agentRows = db
+        .prepare(`SELECT agent, COUNT(*) AS cnt FROM memories GROUP BY agent`)
+        .all();
     const agent_breakdown = {};
     for (const row of agentRows) {
-        agent_breakdown[row.agent ?? 'unknown'] = row.cnt;
+        agent_breakdown[row.agent ?? "unknown"] = row.cnt;
     }
     return {
         total: stats.total ?? 0,
@@ -456,12 +505,12 @@ export function getDbStats(db) {
     };
 }
 // ─── Validation ────────────────────────────────────────────────────────────────
-export function validateMemory(db, id, agentId = 'unknown') {
+export function validateMemory(db, id, agentId = "unknown") {
     const existing = getMemoryById(db, id);
     if (!existing)
         return false;
     const newCount = (existing.validation_count ?? 0) + 1;
-    const newConfidence = Math.min(0.99, (existing.confidence ?? 0.7) + 0.05);
+    const newConfidence = Math.min(MAX_CONFIDENCE, (existing.confidence ?? 0.7) + VALIDATION_CONFIDENCE_BOOST);
     db.prepare(`
     UPDATE memories
     SET validation_count = ?,
@@ -488,24 +537,21 @@ const CONTRADICTION_PHRASES = [
     /\bwe (now|moved|switched)\b/i,
 ];
 export function detectContradictions(db, embedding, newContent, projectId) {
-    const hasNegation = CONTRADICTION_PHRASES.some(p => p.test(newContent));
+    const hasNegation = CONTRADICTION_PHRASES.some((p) => p.test(newContent));
     if (!hasNegation) {
         return { contradictedIds: [] };
     }
     const query = projectId
         ? `SELECT * FROM memories WHERE status = 'active' AND (project_id = ? OR project_id IS NULL)`
         : `SELECT * FROM memories WHERE status = 'active'`;
-    const rows = (projectId
-        ? db.prepare(query).all(projectId)
-        : db.prepare(query).all());
-    const SIMILARITY_THRESHOLD = 0.35;
+    const rows = (projectId ? db.prepare(query).all(projectId) : db.prepare(query).all());
     const contradictedIds = [];
     for (const row of rows) {
         if (!row.embedding)
             continue;
         const memVec = new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.byteLength / Float32Array.BYTES_PER_ELEMENT);
         const sim = cosineSimilarity(embedding, memVec);
-        if (sim >= SIMILARITY_THRESHOLD) {
+        if (sim >= CONTRADICTION_SIMILARITY_THRESHOLD) {
             contradictedIds.push(row.id);
         }
     }
@@ -521,7 +567,9 @@ export function markContradiction(db, idA, idB) {
             if (row.contradiction_ids)
                 existingIds = JSON.parse(row.contradiction_ids);
         }
-        catch { /* ignore */ }
+        catch (e) {
+            debugLog("db", "Failed to parse contradiction_ids for memory %d: %s", id, e instanceof Error ? e.message : String(e));
+        }
         if (!existingIds.includes(otherId))
             existingIds.push(otherId);
         db.prepare(`
@@ -534,7 +582,9 @@ export function markContradiction(db, idA, idB) {
     update(idB, idA);
 }
 export function getMemoriesByAgent(db, agentId) {
-    return db.prepare(`SELECT * FROM memories WHERE agent = ? ORDER BY created_at DESC`).all(agentId);
+    return db
+        .prepare(`SELECT * FROM memories WHERE agent = ? ORDER BY created_at DESC`)
+        .all(agentId);
 }
 // ─── File Snapshots ────────────────────────────────────────────────────────────
 export function upsertFileSnapshot(db, filePath, commitHash, lineCount) {
@@ -548,12 +598,13 @@ export function upsertFileSnapshot(db, filePath, commitHash, lineCount) {
   `).run(filePath, commitHash, lineCount);
 }
 export function getFileSnapshot(db, filePath) {
-    return db.prepare('SELECT * FROM file_snapshots WHERE file_path = ?')
-        .get(filePath) ?? null;
+    return (db
+        .prepare("SELECT * FROM file_snapshots WHERE file_path = ?")
+        .get(filePath) ?? null);
 }
 // ─── Ingestion Log ─────────────────────────────────────────────────────────────
 export function isCommitIngested(db, hash) {
-    const row = db.prepare('SELECT 1 FROM ingested_commits WHERE commit_hash = ?').get(hash);
+    const row = db.prepare("SELECT 1 FROM ingested_commits WHERE commit_hash = ?").get(hash);
     return row !== undefined;
 }
 export function markCommitIngested(db, hash, count) {

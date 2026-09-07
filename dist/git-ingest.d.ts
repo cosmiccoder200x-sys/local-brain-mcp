@@ -10,8 +10,8 @@
  *  ✅ EXTRACTS: author, branch, changed files list, confidence & importance ratings
  *  ✅ DEDUPLICATES: detects duplicate knowledge and merges provenance cleanly
  */
-import Database from 'better-sqlite3';
-import { type MemoryCategory } from './db.js';
+import Database from "better-sqlite3";
+import { type MemoryCategory } from "./db.js";
 export declare function inferCategory(message: string): MemoryCategory;
 export declare function inferImportance(message: string): number;
 export interface CommitData {

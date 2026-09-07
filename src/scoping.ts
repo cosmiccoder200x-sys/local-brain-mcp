@@ -5,7 +5,7 @@
  * from that sub-package — preventing noise from unrelated modules.
  */
 
-import path from 'path';
+import path from "path";
 
 // ─── Path Sanitization ────────────────────────────────────────────────────────
 
@@ -14,23 +14,23 @@ import path from 'path';
  * Returns normalized repo-relative path (e.g. 'src/auth/jwt.ts') or null if invalid.
  */
 export function sanitizeFilePath(filePath: string | null | undefined): string | null {
-  if (!filePath || typeof filePath !== 'string') return null;
+  if (!filePath || typeof filePath !== "string") return null;
 
   // Strip null bytes and control characters
-  const clean = filePath.replace(/[\x00-\x1f\x7f]/g, '').trim();
+  const clean = filePath.replace(/[\x00-\x1f\x7f]/g, "").trim();
   if (!clean) return null;
 
   // Normalize separators to POSIX
-  const normalized = clean.replace(/\\/g, '/');
+  const normalized = clean.replace(/\\/g, "/");
 
   // Prevent absolute paths escaping or root prefixes
-  const withoutDrive = normalized.replace(/^[a-zA-Z]:\//, '');
-  const segments = withoutDrive.split('/').filter(Boolean);
+  const withoutDrive = normalized.replace(/^[a-zA-Z]:\//, "");
+  const segments = withoutDrive.split("/").filter(Boolean);
 
   const safeSegments: string[] = [];
   for (const seg of segments) {
-    if (seg === '.' || seg === '') continue;
-    if (seg === '..') {
+    if (seg === "." || seg === "") continue;
+    if (seg === "..") {
       // Prevent traversing above root
       if (safeSegments.length > 0) {
         safeSegments.pop();
@@ -40,12 +40,12 @@ export function sanitizeFilePath(filePath: string | null | undefined): string | 
     safeSegments.push(seg);
   }
 
-  return safeSegments.length > 0 ? safeSegments.join('/') : null;
+  return safeSegments.length > 0 ? safeSegments.join("/") : null;
 }
 
 // ─── Package Scope Detection ──────────────────────────────────────────────────
 
-const MONOREPO_ROOTS = ['packages', 'apps', 'libs', 'services', 'modules'];
+const MONOREPO_ROOTS = ["packages", "apps", "libs", "services", "modules"];
 
 /**
  * Derive the monorepo package scope from a file path.
@@ -59,7 +59,7 @@ export function derivePackageScope(filePath: string | null | undefined): string 
   const sanitized = sanitizeFilePath(filePath);
   if (!sanitized) return null;
 
-  const parts = sanitized.split('/');
+  const parts = sanitized.split("/");
 
   for (const root of MONOREPO_ROOTS) {
     const idx = parts.indexOf(root);
@@ -78,10 +78,8 @@ export function derivePackageScope(filePath: string | null | undefined): string 
  *   scope: 'packages/auth'    → LIKE 'packages/auth/%' OR 'packages/auth'
  *   scope: null               → no filter (query all)
  */
-export function buildScopeFilter(
-  scope: string | null
-): { sql: string; params: string[] } {
-  if (!scope) return { sql: '', params: [] };
+export function buildScopeFilter(scope: string | null): { sql: string; params: string[] } {
+  if (!scope) return { sql: "", params: [] };
 
   return {
     sql: `AND (package_scope = ? OR package_scope LIKE ? OR package_scope IS NULL)`,
@@ -107,7 +105,7 @@ export function detectWorkingScope(cwd?: string): string | null {
  *   → packages/auth/jwt.ts
  */
 export function toRelativePath(filePath: string, repoRoot: string): string {
-  if (!filePath) return '';
-  const rel = path.relative(repoRoot, filePath).replace(/\\/g, '/');
+  if (!filePath) return "";
+  const rel = path.relative(repoRoot, filePath).replace(/\\/g, "/");
   return sanitizeFilePath(rel) ?? rel;
 }

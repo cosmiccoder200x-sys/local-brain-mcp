@@ -12,8 +12,8 @@
  *
  * Compatible with: Claude Code, Cursor, Antigravity, GitHub Copilot, Windsurf, Zed.
  */
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { type Tool } from '@modelcontextprotocol/sdk/types.js';
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { type Tool } from "@modelcontextprotocol/sdk/types.js";
 export declare const MCP_TOOLS: Tool[];
 export declare function createMcpServer(): Server;
 //# sourceMappingURL=mcp-server.d.ts.map

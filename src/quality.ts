@@ -6,12 +6,12 @@
  * raw debug logs, and trivial noise.
  */
 
-import type { MemoryCategory, ImportanceLevel } from './db.js';
+import type { MemoryCategory, ImportanceLevel } from "./db.js";
 
 export interface QualityAssessment {
   isQuality: boolean;
-  score:     number; // 0.0 to 2.0
-  reason?:   string;
+  score: number; // 0.0 to 2.0
+  reason?: string;
 }
 
 // ─── Low-Value Noise Patterns ────────────────────────────────────────────────
@@ -49,7 +49,7 @@ const HIGH_VALUE_PATTERNS: RegExp[] = [
  */
 export function evaluateMemoryQuality(
   content: string,
-  category: MemoryCategory = 'manual'
+  category: MemoryCategory = "manual"
 ): QualityAssessment {
   const trimmed = content.trim();
 
@@ -58,7 +58,7 @@ export function evaluateMemoryQuality(
     return {
       isQuality: false,
       score: 0.1,
-      reason: 'Memory content too short (< 8 characters) to convey meaningful engineering context.',
+      reason: "Memory content too short (< 8 characters) to convey meaningful engineering context.",
     };
   }
 
@@ -68,7 +68,7 @@ export function evaluateMemoryQuality(
       return {
         isQuality: false,
         score: 0.2,
-        reason: 'Content matches ephemeral command or temporary debugging pattern.',
+        reason: "Content matches ephemeral command or temporary debugging pattern.",
       };
     }
   }
@@ -76,9 +76,9 @@ export function evaluateMemoryQuality(
   let score = 1.0;
 
   // 3. Category weighting
-  if (category === 'architecture' || category === 'fix') {
+  if (category === "architecture" || category === "fix") {
     score += 0.3;
-  } else if (category === 'bug') {
+  } else if (category === "bug") {
     score += 0.2;
   }
 
@@ -92,7 +92,7 @@ export function evaluateMemoryQuality(
   score += Math.min(0.5, matchCount * 0.15);
 
   // 5. Structure boost (contains code snippets, backticks, or multi-line reasoning)
-  if (trimmed.includes('`') || trimmed.includes('\n')) {
+  if (trimmed.includes("`") || trimmed.includes("\n")) {
     score += 0.2;
   }
 
@@ -111,13 +111,31 @@ export function extractReferencedFiles(text: string): string[] {
   const validFiles = new Set<string>();
 
   const knownExtensions = new Set([
-    'ts', 'tsx', 'js', 'jsx', 'json', 'sql', 'py', 'go', 'rs', 'java',
-    'cpp', 'c', 'h', 'hpp', 'md', 'yaml', 'yml', 'toml', 'env', 'sh',
+    "ts",
+    "tsx",
+    "js",
+    "jsx",
+    "json",
+    "sql",
+    "py",
+    "go",
+    "rs",
+    "java",
+    "cpp",
+    "c",
+    "h",
+    "hpp",
+    "md",
+    "yaml",
+    "yml",
+    "toml",
+    "env",
+    "sh",
   ]);
 
   for (const m of matches) {
-    const ext = m.split('.').pop()?.toLowerCase();
-    if (ext && knownExtensions.has(ext) && !m.startsWith('http://') && !m.startsWith('https://')) {
+    const ext = m.split(".").pop()?.toLowerCase();
+    if (ext && knownExtensions.has(ext) && !m.startsWith("http://") && !m.startsWith("https://")) {
       validFiles.add(m);
     }
   }
@@ -131,32 +149,32 @@ export function extractReferencedFiles(text: string): string[] {
 export function detectImportanceLevel(content: string): ImportanceLevel {
   const lower = content.toLowerCase();
   if (
-    lower.includes('critical') ||
-    lower.includes('vulnerability') ||
-    lower.includes('security') ||
-    lower.includes('data loss') ||
-    lower.includes('breaking change') ||
-    lower.includes('must not') ||
-    lower.includes('never')
+    lower.includes("critical") ||
+    lower.includes("vulnerability") ||
+    lower.includes("security") ||
+    lower.includes("data loss") ||
+    lower.includes("breaking change") ||
+    lower.includes("must not") ||
+    lower.includes("never")
   ) {
-    return 'critical';
+    return "critical";
   }
   if (
-    lower.includes('high') ||
-    lower.includes('architecture') ||
-    lower.includes('convention') ||
-    lower.includes('always') ||
-    lower.includes('important')
+    lower.includes("high") ||
+    lower.includes("architecture") ||
+    lower.includes("convention") ||
+    lower.includes("always") ||
+    lower.includes("important")
   ) {
-    return 'high';
+    return "high";
   }
   if (
-    lower.includes('low') ||
-    lower.includes('minor') ||
-    lower.includes('trivial') ||
-    lower.includes('cosmetic')
+    lower.includes("low") ||
+    lower.includes("minor") ||
+    lower.includes("trivial") ||
+    lower.includes("cosmetic")
   ) {
-    return 'low';
+    return "low";
   }
-  return 'medium';
+  return "medium";
 }

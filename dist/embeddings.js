@@ -13,13 +13,41 @@
  * Latency: < 0.2ms per embedding. 100% offline and deterministic.
  */
 // ─── Config ───────────────────────────────────────────────────────────────────
-export const EMBEDDING_DIM = 384;
+export { EMBEDDING_DIM } from "./config.js";
+import { EMBEDDING_DIM } from "./config.js";
 const NGRAM_SIZE = 3; // character trigrams
 const HASH_SEED = 0x9e3779b9; // golden ratio hash seed
 const STOPWORDS = new Set([
-    'a', 'an', 'and', 'are', 'as', 'at', 'be', 'been', 'by', 'for',
-    'from', 'has', 'have', 'had', 'in', 'is', 'it', 'its', 'not', 'no',
-    'of', 'on', 'or', 'that', 'the', 'this', 'to', 'was', 'were', 'with',
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "been",
+    "by",
+    "for",
+    "from",
+    "has",
+    "have",
+    "had",
+    "in",
+    "is",
+    "it",
+    "its",
+    "not",
+    "no",
+    "of",
+    "on",
+    "or",
+    "that",
+    "the",
+    "this",
+    "to",
+    "was",
+    "were",
+    "with",
 ]);
 // ─── Hashing ─────────────────────────────────────────────────────────────────
 /**
@@ -54,7 +82,7 @@ export function hashSign(s) {
  *   "db_connection_pool"      -> ["db", "connection", "pool", "db_connection_pool"]
  */
 export function tokenize(text) {
-    if (!text || typeof text !== 'string')
+    if (!text || typeof text !== "string")
         return [];
     // Match identifiers, file paths, numbers, or words
     const rawTokens = text.match(/[A-Za-z0-9_./-]+/g) ?? [];
@@ -64,17 +92,17 @@ export function tokenize(text) {
         if (STOPWORDS.has(lower))
             continue;
         // Add full cleaned token
-        const cleaned = lower.replace(/[^a-z0-9_.-]/g, '');
+        const cleaned = lower.replace(/[^a-z0-9_.-]/g, "");
         if (cleaned.length >= 2) {
             tokens.push(cleaned);
         }
         // Split camelCase: "jwtToken" -> ["jwt", "token"]
         const camelParts = raw
-            .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-            .replace(/([A-Z]+)([A-Z][a-z0-9])/g, '$1 $2')
+            .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+            .replace(/([A-Z]+)([A-Z][a-z0-9])/g, "$1 $2")
             .toLowerCase()
             .split(/[\s_./-]+/)
-            .filter(p => p.length >= 2 && !STOPWORDS.has(p));
+            .filter((p) => p.length >= 2 && !STOPWORDS.has(p));
         for (const part of camelParts) {
             if (part !== cleaned) {
                 tokens.push(part);
@@ -89,7 +117,7 @@ export function tokenize(text) {
  */
 export function embed(text) {
     const vec = new Float32Array(EMBEDDING_DIM);
-    if (!text || typeof text !== 'string' || !text.trim()) {
+    if (!text || typeof text !== "string" || !text.trim()) {
         return vec; // return zero vector for empty input
     }
     const tokens = tokenize(text);
@@ -110,10 +138,14 @@ export function embed(text) {
         vec[bb] += hashSign(bg) * 0.4;
     }
     // 3. Character trigrams for morphological / typo tolerance
-    const compact = text.toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+    const compact = text
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
     for (let i = 0; i <= compact.length - NGRAM_SIZE; i++) {
         const ng = compact.slice(i, i + NGRAM_SIZE);
-        if (!ng.includes(' ')) {
+        if (!ng.includes(" ")) {
             const bucket = hashToBucket(ng, EMBEDDING_DIM);
             vec[bucket] += hashSign(ng) * 0.25;
         }
@@ -156,7 +188,7 @@ export function cosineSimilarity(a, b) {
  * Warmup routine (synchronous pure-JS engine ready immediately).
  */
 export async function warmupEmbeddings() {
-    embed('warmup initial memory index');
+    embed("warmup initial memory index");
 }
 /**
  * Standard token count estimate (1 token ≈ 4 characters).

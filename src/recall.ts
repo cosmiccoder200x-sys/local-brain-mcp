@@ -12,62 +12,69 @@
  *  ✅ Fast fallback to structured keyword search if vector matches are sparse
  */
 
-import Database from 'better-sqlite3';
-import { embed, cosineSimilarity, estimateTokens } from './embeddings.js';
-import { buildScopeFilter, derivePackageScope, sanitizeFilePath } from './scoping.js';
-import type { Memory, MemoryCategory } from './db.js';
+import Database from "better-sqlite3";
+import { embed, cosineSimilarity, estimateTokens } from "./embeddings.js";
+import { buildScopeFilter, derivePackageScope, sanitizeFilePath } from "./scoping.js";
+import type { Memory, MemoryCategory } from "./db.js";
+import {
+  MAX_RESPONSE_TOKENS,
+  FRESHNESS_HALF_LIFE_DAYS,
+  RANKING_WEIGHTS,
+  STATUS_MULTIPLIERS,
+  CONTRADICTION_PENALTY,
+} from "./config.js";
+import { debugLog } from "./debug.js";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-export const MAX_RESPONSE_TOKENS = 250;
+// Re-export for backward compatibility with tests
+export { MAX_RESPONSE_TOKENS } from "./config.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 export interface RecallOptions {
-  query:               string;
-  file_path?:          string;
-  max_items?:          number;
-  category?:           MemoryCategory;
+  query: string;
+  file_path?: string;
+  max_items?: number;
+  category?: MemoryCategory;
   include_deprecated?: boolean;
-  min_confidence?:     number;
-  agent_filter?:       string;   // optional: restrict to specific agent (NOT default)
-  project_id?:         string;   // optional: restrict to specific project
+  min_confidence?: number;
+  agent_filter?: string; // optional: restrict to specific agent (NOT default)
+  project_id?: string; // optional: restrict to specific project
 }
 
 export interface RecallResult {
-  memories:        FormattedMemory[];
-  total_tokens:    number;
-  truncated:       boolean;
-  query:           string;
+  memories: FormattedMemory[];
+  total_tokens: number;
+  truncated: boolean;
+  query: string;
   agent_breakdown: Record<string, number>; // agent → count of returned memories
-  contradictions:  number;                 // count of contradiction-flagged memories returned
+  contradictions: number; // count of contradiction-flagged memories returned
 }
 
 export interface FormattedMemory {
-  id:                 number;
-  category:           string;
-  summary:            string;
-  file_path:          string | null;
-  files:              string[];
-  commit_hash:        string | null;
-  author:             string | null;
-  agent:              string;       // which AI agent created this memory
-  confidence:         number;
-  importance:         number;
-  status:             string;
-  similarity:         number;
-  rank_score:         number;
-  superseded_by:      number | null;
-  validation_count:   number;       // how many agents validated this
-  contradiction_flag: number;       // 1 = contradicts another active memory
-  importance_level:   string;       // 'low'|'medium'|'high'|'critical'
+  id: number;
+  category: string;
+  summary: string;
+  file_path: string | null;
+  files: string[];
+  commit_hash: string | null;
+  author: string | null;
+  agent: string; // which AI agent created this memory
+  confidence: number;
+  importance: number;
+  status: string;
+  similarity: number;
+  rank_score: number;
+  superseded_by: number | null;
+  validation_count: number; // how many agents validated this
+  contradiction_flag: number; // 1 = contradicts another active memory
+  importance_level: string; // 'low'|'medium'|'high'|'critical'
 }
 
 export interface ScoredMemory extends Memory {
-  similarity:   number;
-  scopeScore:   number;
+  similarity: number;
+  scopeScore: number;
   recencyScore: number;
-  rankScore:    number;
+  rankScore: number;
 }
 
 // ─── Deterministic Multi-Factor Ranking ────────────────────────────────────────
@@ -80,13 +87,23 @@ export function calculateFreshness(dateString: string): number {
     const timestamp = new Date(dateString).getTime();
     const now = Date.now();
     const ageInDays = Math.max(0, (now - timestamp) / (1000 * 60 * 60 * 24));
-    // Half-life ~120 days for freshness score ~0.50
-    return Math.exp(-ageInDays * Math.LN2 / 120);
-  } catch {
+    // Half-life for freshness score ~0.50
+    return Math.exp((-ageInDays * Math.LN2) / FRESHNESS_HALF_LIFE_DAYS);
+  } catch (e) {
+    debugLog(
+      "recall",
+      "Failed to calculate freshness for date %s: %s",
+      dateString,
+      e instanceof Error ? e.message : String(e)
+    );
     return 0.5;
   }
 }
 
+/**
+ * Simplified scoring function for external callers and tests.
+ * The active recall path uses computeRankScore instead.
+ */
 export function computeFinalScore(
   similarity: number,
   category: string,
@@ -95,8 +112,9 @@ export function computeFinalScore(
   confidence = 1.0
 ): { finalScore: number } {
   const freshness = calculateFreshness(createdAt);
-  const catMultiplier = category === 'architecture' || category === 'fix' ? 1.25 : 1.0;
-  const raw = similarity * 0.45 + freshness * 0.20 + (confidence * 0.15) + (Math.min(1.0, importance / 1.5) * 0.20);
+  const catMultiplier = category === "architecture" || category === "fix" ? 1.25 : 1.0;
+  const raw =
+    similarity * 0.45 + freshness * 0.2 + confidence * 0.15 + Math.min(1.0, importance / 1.5) * 0.2;
   const finalScore = Math.min(1.0, raw * catMultiplier);
   return { finalScore: Math.round(finalScore * 1000) / 1000 };
 }
@@ -127,7 +145,14 @@ function calculateScopeScore(
     try {
       const files: string[] = JSON.parse(mem.files);
       if (files.includes(targetFile)) return 0.95;
-    } catch { /* ignore */ }
+    } catch (e) {
+      debugLog(
+        "recall",
+        "Failed to parse files JSON for memory %d: %s",
+        mem.id,
+        e instanceof Error ? e.message : String(e)
+      );
+    }
   }
 
   // Same monorepo package scope
@@ -137,11 +162,11 @@ function calculateScopeScore(
 
   // Unscoped/general memory applicable everywhere
   if (!mem.package_scope && !mem.file_path) {
-    return 0.40;
+    return 0.4;
   }
 
   // Different package scope
-  return 0.10;
+  return 0.1;
 }
 
 /**
@@ -165,27 +190,25 @@ function computeRankScore(
   targetFile?: string,
   targetPackageScope?: string | null
 ): ScoredMemory {
-  const scopeScore      = calculateScopeScore(mem, targetFile, targetPackageScope);
-  const recencyScore    = calculateRecencyScore(mem.created_at);
+  const scopeScore = calculateScopeScore(mem, targetFile, targetPackageScope);
+  const recencyScore = calculateRecencyScore(mem.created_at);
   const confidenceScore = mem.confidence ?? 1.0;
   const importanceScore = Math.min(1.0, (mem.importance ?? 1.0) / 2.0);
   const validationScore = Math.min(1.0, (mem.validation_count ?? 0) * 0.25);
-  const qualityScore    = mem.quality_score ?? 1.0;
+  const qualityScore = mem.quality_score ?? 1.0;
 
-  let statusMultiplier = 1.0;
-  if (mem.status === 'stale') statusMultiplier = 0.25;
-  if (mem.status === 'deprecated') statusMultiplier = 0.05;
+  const statusMultiplier = STATUS_MULTIPLIERS[mem.status as keyof typeof STATUS_MULTIPLIERS] ?? 1.0;
 
-  const contradictionPenalty = mem.contradiction_flag === 1 ? 0.60 : 1.0;
+  const contradictionPenalty = mem.contradiction_flag === 1 ? CONTRADICTION_PENALTY : 1.0;
 
   const rawScore =
-    similarity      * 0.45 +
-    scopeScore      * 0.20 +
-    recencyScore    * 0.10 +
-    confidenceScore * 0.10 +
-    importanceScore * 0.05 +
-    validationScore * 0.05 +
-    qualityScore    * 0.05;
+    similarity * RANKING_WEIGHTS.similarity +
+    scopeScore * RANKING_WEIGHTS.scope +
+    recencyScore * RANKING_WEIGHTS.recency +
+    confidenceScore * RANKING_WEIGHTS.confidence +
+    importanceScore * RANKING_WEIGHTS.importance +
+    validationScore * RANKING_WEIGHTS.validation +
+    qualityScore * RANKING_WEIGHTS.quality;
 
   const finalRankScore = rawScore * statusMultiplier * contradictionPenalty;
 
@@ -217,10 +240,7 @@ function vectorSearch(
       ${categoryFilter.sql}
   `;
 
-  const rows = db.prepare(sql).all(
-    ...scopeFilter.params,
-    ...categoryFilter.params
-  ) as Memory[];
+  const rows = db.prepare(sql).all(...scopeFilter.params, ...categoryFilter.params) as Memory[];
 
   const scored: ScoredMemory[] = [];
 
@@ -257,8 +277,12 @@ function keywordSearch(
   targetFile?: string,
   targetPackageScope?: string | null
 ): ScoredMemory[] {
-  const words = query.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 2);
-  const pattern = `%${words.slice(0, 3).join('%')}%`;
+  const words = query
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 2);
+  const pattern = `%${words.slice(0, 3).join("%")}%`;
 
   const sql = `
     SELECT *
@@ -271,14 +295,12 @@ function keywordSearch(
     LIMIT 20
   `;
 
-  const rows = db.prepare(sql).all(
-    pattern,
-    pattern,
-    ...scopeFilter.params,
-    ...categoryFilter.params
-  ) as Memory[];
+  const rows = db
+    .prepare(sql)
+    .all(pattern, pattern, ...scopeFilter.params, ...categoryFilter.params) as Memory[];
 
-  return rows.map(r => computeRankScore(r, 0.6, targetFile, targetPackageScope))
+  return rows
+    .map((r) => computeRankScore(r, 0.6, targetFile, targetPackageScope))
     .sort((a, b) => b.rankScore - a.rankScore);
 }
 
@@ -291,41 +313,48 @@ function formatMemory(mem: ScoredMemory): {
   let fileList: string[] = [];
   try {
     if (mem.files) fileList = JSON.parse(mem.files);
-  } catch { /* ignore */ }
+  } catch (e) {
+    debugLog(
+      "recall",
+      "Failed to parse files in formatMemory: %s",
+      e instanceof Error ? e.message : String(e)
+    );
+  }
   if (mem.file_path && !fileList.includes(mem.file_path)) {
     fileList.unshift(mem.file_path);
   }
 
-  const primaryFile = mem.file_path ?? (fileList[0] ?? 'general');
-  const commitTag = mem.commit_hash ? ` @ ${mem.commit_hash.slice(0, 7)}` : '';
+  const primaryFile = mem.file_path ?? fileList[0] ?? "general";
+  const commitTag = mem.commit_hash ? ` @ ${mem.commit_hash.slice(0, 7)}` : "";
   const confPercent = Math.round((mem.confidence ?? 1.0) * 100);
-  const statusTag = mem.status !== 'active' ? ` [${mem.status.toUpperCase()}]` : '';
-  const supersededTag = mem.superseded_by ? ' [SUPERSEDED]' : '';
-  const agentTag = mem.agent && mem.agent !== 'unknown' ? ` [agent: ${mem.agent}]` : '';
-  const validatedTag = (mem.validation_count ?? 0) > 0 ? ` [validated: ${mem.validation_count}×]` : '';
-  const contradictionTag = mem.contradiction_flag === 1 ? ' [CONTRADICTION DETECTED]' : '';
+  const statusTag = mem.status !== "active" ? ` [${mem.status.toUpperCase()}]` : "";
+  const supersededTag = mem.superseded_by ? " [SUPERSEDED]" : "";
+  const agentTag = mem.agent && mem.agent !== "unknown" ? ` [agent: ${mem.agent}]` : "";
+  const validatedTag =
+    (mem.validation_count ?? 0) > 0 ? ` [validated: ${mem.validation_count}×]` : "";
+  const contradictionTag = mem.contradiction_flag === 1 ? " [CONTRADICTION DETECTED]" : "";
 
   const line = `• [${primaryFile}${commitTag}] (${mem.category}${statusTag}${supersededTag}${agentTag}${validatedTag}${contradictionTag} | conf: ${confPercent}%): ${mem.summary.slice(0, 200)}`;
 
   return {
     formatted: {
-      id:                 mem.id,
-      category:           mem.category,
-      summary:            mem.summary,
-      file_path:          mem.file_path,
-      files:              fileList,
-      commit_hash:        mem.commit_hash,
-      author:             mem.author,
-      agent:              mem.agent ?? 'unknown',
-      confidence:         mem.confidence,
-      importance:         mem.importance,
-      status:             mem.status,
-      similarity:         Math.round(mem.similarity * 100) / 100,
-      rank_score:         mem.rankScore,
-      superseded_by:      mem.superseded_by,
-      validation_count:   mem.validation_count ?? 0,
+      id: mem.id,
+      category: mem.category,
+      summary: mem.summary,
+      file_path: mem.file_path,
+      files: fileList,
+      commit_hash: mem.commit_hash,
+      author: mem.author,
+      agent: mem.agent ?? "unknown",
+      confidence: mem.confidence,
+      importance: mem.importance,
+      status: mem.status,
+      similarity: Math.round(mem.similarity * 100) / 100,
+      rank_score: mem.rankScore,
+      superseded_by: mem.superseded_by,
+      validation_count: mem.validation_count ?? 0,
       contradiction_flag: mem.contradiction_flag ?? 0,
-      importance_level:   mem.importance_level ?? 'medium',
+      importance_level: mem.importance_level ?? "medium",
     },
     line,
   };
@@ -349,12 +378,12 @@ export async function recallMemories(
   } = options;
 
   const sanitizedPath = sanitizeFilePath(file_path);
-  const packageScope  = derivePackageScope(sanitizedPath);
-  const scopeFilter   = buildScopeFilter(packageScope);
+  const packageScope = derivePackageScope(sanitizedPath);
+  const scopeFilter = buildScopeFilter(packageScope);
 
   const categoryFilter = category
-    ? { sql: 'AND category = ?', params: [category] }
-    : { sql: '', params: [] };
+    ? { sql: "AND category = ?", params: [category] }
+    : { sql: "", params: [] };
 
   const statusFilter = include_deprecated
     ? "status IN ('active', 'stale', 'deprecated')"
@@ -374,17 +403,17 @@ export async function recallMemories(
 
   // Filter by min confidence if specified
   if (min_confidence > 0) {
-    candidates = candidates.filter(c => (c.confidence ?? 1.0) >= min_confidence);
+    candidates = candidates.filter((c) => (c.confidence ?? 1.0) >= min_confidence);
   }
 
   // Filter by agent if specified
   if (agent_filter) {
-    candidates = candidates.filter(c => c.agent === agent_filter);
+    candidates = candidates.filter((c) => c.agent === agent_filter);
   }
 
   // Filter by project_id if specified
   if (project_id) {
-    candidates = candidates.filter(c => !c.project_id || c.project_id === project_id);
+    candidates = candidates.filter((c) => !c.project_id || c.project_id === project_id);
   }
 
   // Fallback to keyword search if vector search found nothing
@@ -400,13 +429,13 @@ export async function recallMemories(
     );
 
     if (min_confidence > 0) {
-      candidates = candidates.filter(c => (c.confidence ?? 1.0) >= min_confidence);
+      candidates = candidates.filter((c) => (c.confidence ?? 1.0) >= min_confidence);
     }
     if (agent_filter) {
-      candidates = candidates.filter(c => c.agent === agent_filter);
+      candidates = candidates.filter((c) => c.agent === agent_filter);
     }
     if (project_id) {
-      candidates = candidates.filter(c => !c.project_id || c.project_id === project_id);
+      candidates = candidates.filter((c) => !c.project_id || c.project_id === project_id);
     }
   }
 
@@ -430,7 +459,7 @@ export async function recallMemories(
     memories.push(formatted);
     totalTokens += cost;
 
-    const ag = formatted.agent || 'unknown';
+    const ag = formatted.agent || "unknown";
     agent_breakdown[ag] = (agent_breakdown[ag] || 0) + 1;
 
     if (formatted.contradiction_flag === 1) {
@@ -455,15 +484,15 @@ export function formatRecallMarkdown(result: RecallResult, query: string): strin
     return `No memories found for: "${query}"`;
   }
 
-  const lines = result.memories.map(m => {
-    const primaryFile = m.file_path ?? 'general';
-    const commitTag = m.commit_hash ? ` @ ${m.commit_hash.slice(0, 7)}` : '';
-    const statusTag = m.status !== 'active' ? ` [${m.status.toUpperCase()}]` : '';
-    const supersededTag = m.superseded_by ? ' [SUPERSEDED]' : '';
-    const confTag = m.confidence < 1.0 ? ` | conf: ${Math.round(m.confidence * 100)}%` : '';
-    const agentTag = m.agent && m.agent !== 'unknown' ? ` [agent: ${m.agent}]` : '';
-    const validatedTag = m.validation_count > 0 ? ` [validated: ${m.validation_count}×]` : '';
-    const contradictionTag = m.contradiction_flag === 1 ? ' ⚠️ [CONTRADICTION DETECTED]' : '';
+  const lines = result.memories.map((m) => {
+    const primaryFile = m.file_path ?? "general";
+    const commitTag = m.commit_hash ? ` @ ${m.commit_hash.slice(0, 7)}` : "";
+    const statusTag = m.status !== "active" ? ` [${m.status.toUpperCase()}]` : "";
+    const supersededTag = m.superseded_by ? " [SUPERSEDED]" : "";
+    const confTag = m.confidence < 1.0 ? ` | conf: ${Math.round(m.confidence * 100)}%` : "";
+    const agentTag = m.agent && m.agent !== "unknown" ? ` [agent: ${m.agent}]` : "";
+    const validatedTag = m.validation_count > 0 ? ` [validated: ${m.validation_count}×]` : "";
+    const contradictionTag = m.contradiction_flag === 1 ? " ⚠️ [CONTRADICTION DETECTED]" : "";
 
     return `• [${primaryFile}${commitTag}] (${m.category}${statusTag}${supersededTag}${agentTag}${validatedTag}${contradictionTag}${confTag}): ${m.summary.slice(0, 200)}`;
   });
@@ -471,26 +500,27 @@ export function formatRecallMarkdown(result: RecallResult, query: string): strin
   const header = `## Brain Recall: "${query}"`;
   const footer = result.truncated
     ? `\n_Results truncated to stay within ${MAX_RESPONSE_TOKENS} token budget._`
-    : '';
+    : "";
 
-  return [header, ...lines, footer].filter(Boolean).join('\n');
+  return [header, ...lines, footer].filter(Boolean).join("\n");
 }
 
 // ─── File Trace ───────────────────────────────────────────────────────────────
 
-export function traceFile(
-  db: Database.Database,
-  filePath: string
-): Memory[] {
+export function traceFile(db: Database.Database, filePath: string): Memory[] {
   const sanitized = sanitizeFilePath(filePath);
   if (!sanitized) return [];
 
-  return db.prepare(`
+  return db
+    .prepare(
+      `
     SELECT * FROM memories
     WHERE file_path = ? OR files LIKE ?
     ORDER BY
       CASE status WHEN 'active' THEN 0 WHEN 'stale' THEN 1 ELSE 2 END,
       created_at DESC
     LIMIT 30
-  `).all(filePath, `%"${filePath}"%`) as Memory[];
+  `
+    )
+    .all(filePath, `%"${filePath}"%`) as Memory[];
 }
