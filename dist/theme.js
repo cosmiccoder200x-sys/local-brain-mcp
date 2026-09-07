@@ -201,11 +201,18 @@ export function compactMark() {
     return `${ESC}38;2;168;85;247m◈${ESC}38;2;6;182;212m>${RESET}`;
 }
 /**
- * Returns the Brain + Terminal ASCII artwork.
- * Left side represents neural/synapse connections; right side represents terminal `>_`.
+ * Returns the app-tile ASCII artwork matching the brand mark.
+ * A dark rounded tile containing the centered terminal `>_` prompt
+ * with synapse nodes (`●`) on its circuit traces.
  */
 export function brainAsciiArt() {
-    return ["   ╭──────╮   ", " ╭─╯ ╷  ╷ ╰─╮ ", " │ ●─┼──┼─ >_ ", " ╰─╮ ╵  ╵ ╭─╯ ", "   ╰──────╯   "];
+    return [
+        "  ╭────────────╮  ",
+        "  │ ●        ● │  ",
+        "  │     >_     │  ",
+        "  │ ●   ●   ●  │  ",
+        "  ╰────────────╯  ",
+    ];
 }
 /**
  * Strips ANSI color codes for accurate width calculation.

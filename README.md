@@ -4,6 +4,8 @@
 [![Node Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
 [![Website](https://img.shields.io/badge/website-live-06B6D4.svg)](https://local-brain-mcp.vercel.app/)
 [![CI](https://github.com/cosmiccoder200x-sys/local-brain-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/cosmiccoder200x-sys/local-brain-mcp/actions)
+[![npm version](https://img.shields.io/npm/v/local-brain-mcp.svg)](https://www.npmjs.com/package/local-brain-mcp)
+[![npm downloads](https://img.shields.io/npm/dm/local-brain-mcp.svg)](https://www.npmjs.com/package/local-brain-mcp)
 
 <p align="center">
   <img src="assets/logo/local-brain.svg" width="120" height="120" alt="Local Brain MCP Logo" />
@@ -91,11 +93,11 @@ local-brain status
 ```
 ╭────────────────────────────────────────────────────╮
 │                                                    │
-│      ╭──────╮                                      │
-│    ╭─╯ ╷  ╷ ╰─╮                                    │
-│    │ ●─┼──┼─ >_                                    │
-│    ╰─╮ ╵  ╵ ╭─╯                                    │
-│      ╰──────╯                                      │
+│      ╭────────────╮                                │
+│      │ ●        ● │                                │
+│      │     >_     │                                │
+│      │ ●   ●   ●  │                                │
+│      ╰────────────╯                                │
 │                                                    │
 │      Local Brain MCP                               │
 │      Shared Memory for AI Coding Agents            │
