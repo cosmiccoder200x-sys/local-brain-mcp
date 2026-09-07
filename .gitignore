@@ -9,3 +9,5 @@ node_modules/
 .env
 .env.*
 !.env.example
+.opencode/
+dist/schema.sql
