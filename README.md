@@ -25,14 +25,12 @@
 Requires **Node.js >= 18.0.0**.
 
 ```bash
-# Install globally straight from GitHub
-npm install -g github:cosmiccoder200x-sys/local-brain-mcp
+# Install globally from npm
+npm install -g local-brain-mcp
 
 # Verify
 local-brain --version
 ```
-
-> npm registry release (`npm install -g local-brain-mcp`) is coming soon — until then, install from GitHub as above.
 
 Then continue with [Quick Start](#quick-start) below (`local-brain init` → `ingest` → `status`).
 
