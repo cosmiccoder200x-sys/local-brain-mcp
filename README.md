@@ -7,7 +7,7 @@
 [![npm version](https://img.shields.io/npm/v/local-brain-mcp.svg)](https://www.npmjs.com/package/local-brain-mcp)
 [![npm downloads](https://img.shields.io/npm/dm/local-brain-mcp.svg)](https://www.npmjs.com/package/local-brain-mcp)
 
-<h1 align="center">Local Brain MCP </h1>
+<h1 align="center">Local Brain MCP</h1>
 <p align="center"><b>Persistent, local-first shared memory for AI coding agents.</b></p>
 
 <p align="center">
