@@ -7,8 +7,9 @@
  *  - buildProvenanceNote() — human-readable provenance string for trace output
  *  - AGENT_IDS            — canonical agent identifier set
  */
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { createHash } from "crypto";
+import { existsSync, readFileSync, statSync } from "fs";
 import path from "path";
 import { debugLog } from "./debug.js";
 // ─── Agent Identity ────────────────────────────────────────────────────────────
@@ -72,13 +73,44 @@ export function normalizeAgentId(raw) {
  */
 export function getProjectId(repoRoot) {
     const root = repoRoot ?? process.cwd();
-    // 1. Try git remote URL — most reliable across machines
+    // 1. Try git remote URL — prefer library functions (fs reads) over shell-outs
     try {
-        const remote = execSync("git remote get-url origin", {
-            cwd: root,
-            encoding: "utf8",
-            stdio: ["pipe", "pipe", "pipe"],
-        }).trim();
+        let remote = null;
+        // Fast path: inspect .git/config directly via filesystem library functions
+        try {
+            let gitDir = path.join(root, ".git");
+            if (existsSync(gitDir)) {
+                const stat = statSync(gitDir);
+                if (stat.isFile()) {
+                    const content = readFileSync(gitDir, "utf8");
+                    const match = content.match(/^gitdir:\s*(.+)$/m);
+                    if (match) {
+                        gitDir = path.resolve(root, match[1].trim());
+                    }
+                }
+                const configPath = path.join(gitDir, "config");
+                if (existsSync(configPath)) {
+                    const config = readFileSync(configPath, "utf8");
+                    const remoteMatch = config.match(/\[remote\s+["']?origin["']?\][^[]*\burl\s*=\s*([^\r\n]+)/i);
+                    if (remoteMatch && remoteMatch[1]) {
+                        remote = remoteMatch[1].trim();
+                    }
+                }
+            }
+        }
+        catch (fsErr) {
+            debugLog("provenance", "Failed to read git config from disk: %s", fsErr instanceof Error ? fsErr.message : String(fsErr));
+        }
+        // Fallback: spawn git executable directly with arguments array (never run through a shell)
+        if (!remote) {
+            remote = execFileSync("git", ["remote", "get-url", "origin"], {
+                cwd: root,
+                encoding: "utf8",
+                stdio: ["pipe", "pipe", "pipe"],
+                windowsHide: true,
+                timeout: 5000,
+            }).trim();
+        }
         if (remote) {
             // Normalize: strip protocol, .git suffix, trailing slashes
             const normalized = remote
