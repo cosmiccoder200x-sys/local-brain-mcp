@@ -6,7 +6,7 @@
  */
 
 import Database from "better-sqlite3";
-import { mkdirSync } from "fs";
+import { chmodSync, mkdirSync } from "fs";
 import os from "os";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -279,6 +279,53 @@ CREATE TABLE IF NOT EXISTS ingested_commits (
 let _defaultDb: Database.Database | null = null;
 const _openDbs = new Set<Database.Database>();
 
+/**
+ * Restrict the SQLite database and any existing WAL sidecar files to the
+ * current user. The database can contain private source-code context and
+ * engineering notes, so it must not inherit permissive umask defaults.
+ *
+ * SQLite creates WAL/SHM files alongside the database. Setting the database
+ * mode before enabling WAL ensures newly-created sidecars inherit restrictive
+ * permissions; existing sidecars are tightened as well.
+ */
+function secureDatabaseFiles(dbPath: string): void {
+  // Windows does not implement POSIX owner/group/other mode bits.
+  if (process.platform === "win32") return;
+
+  for (const filePath of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`]) {
+    try {
+      chmodSync(filePath, 0o600);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (filePath !== dbPath && code === "ENOENT") continue;
+      throw new Error(`Unable to restrict permissions on Local Brain database file: ${filePath}`, {
+        cause: error,
+      });
+    }
+  }
+}
+
+function openDatabase(dbPath: string): Database.Database {
+  const db = new Database(dbPath);
+  try {
+    // Apply before schema initialization so SQLite-created WAL files inherit
+    // the private database mode rather than the process umask.
+    secureDatabaseFiles(dbPath);
+    db.exec(BASE_SCHEMA_SQL);
+    migrateDb(db);
+
+    db.pragma("journal_mode = WAL");
+    db.pragma("synchronous = NORMAL");
+    db.pragma("temp_store = MEMORY");
+    secureDatabaseFiles(dbPath);
+
+    return db;
+  } catch (error) {
+    db.close();
+    throw error;
+  }
+}
+
 export function getDb(dbPath?: string): Database.Database {
   if (!dbPath) {
     if (_defaultDb && _defaultDb.open) return _defaultDb;
@@ -286,14 +333,7 @@ export function getDb(dbPath?: string): Database.Database {
     const dir = path.dirname(resolvedPath);
     mkdirSync(dir, { recursive: true });
 
-    const db = new Database(resolvedPath);
-    db.exec(BASE_SCHEMA_SQL);
-    migrateDb(db);
-
-    db.pragma("journal_mode = WAL");
-    db.pragma("synchronous = NORMAL");
-    db.pragma("temp_store = MEMORY");
-
+    const db = openDatabase(resolvedPath);
     _defaultDb = db;
     _openDbs.add(db);
     return db;
@@ -303,14 +343,7 @@ export function getDb(dbPath?: string): Database.Database {
   const dir = path.dirname(resolvedPath);
   mkdirSync(dir, { recursive: true });
 
-  const db = new Database(resolvedPath);
-  db.exec(BASE_SCHEMA_SQL);
-  migrateDb(db);
-
-  db.pragma("journal_mode = WAL");
-  db.pragma("synchronous = NORMAL");
-  db.pragma("temp_store = MEMORY");
-
+  const db = openDatabase(resolvedPath);
   _openDbs.add(db);
   return db;
 }
