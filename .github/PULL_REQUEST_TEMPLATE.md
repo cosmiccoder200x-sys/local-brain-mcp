@@ -1,13 +1,31 @@
-## What does this PR change?
+## Summary
 
-<!-- One change per PR. Describe the problem and the fix. -->
+<!-- What problem does this PR solve? What changed? -->
 
-## How was it verified?
+## Motivation
 
-- [ ] `npm run typecheck` passes
-- [ ] `npm test` passes (158 tests)
-- [ ] `npm run lint` has no new warnings
+<!-- Why is this change needed? Link the related issue. -->
 
-## Related issues
+Closes #
 
-<!-- e.g. Closes #123 -->
+## Implementation
+
+<!-- Briefly explain the approach and any trade-offs. -->
+
+## Verification
+
+List the exact commands you ran and their results.
+
+- [ ] `npm run typecheck`
+- [ ] `npm run build`
+- [ ] `npm test`
+- [ ] `npm run lint`
+- [ ] Relevant evaluation/benchmark run (if applicable)
+
+## Contributor checklist
+
+- [ ] Tests added or updated where appropriate.
+- [ ] Documentation updated where behavior or usage changed.
+- [ ] No secrets, credentials, private data, or generated database files included.
+- [ ] No unexpected network calls, telemetry, or cloud dependencies introduced.
+- [ ] Compatibility and migration implications considered.
