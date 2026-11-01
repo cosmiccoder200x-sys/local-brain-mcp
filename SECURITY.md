@@ -1,42 +1,38 @@
 # Security Policy
 
-## Threat Model & Local-Only Guarantees
+## Supported versions
 
-`local-brain-mcp` is architected as an entirely local-first, zero-egress system designed to operate securely within a developer's workstation without sending codebase context to third-party servers.
+Security fixes are made against the latest version on the `main` branch. Users should upgrade to the latest published release when a fix is available.
 
-### 1. Local-Only Storage
-* All memory records, vector embeddings, and commit metadata are stored locally in an embedded SQLite database (`.git/brain.db` or `~/.config/local-brain/brain.db`).
-* No data is transmitted to external servers, cloud providers, or analytics platforms.
-* No API keys or remote telemetry are required or used.
+## Security design notes
 
-### 2. Network Isolation
-* The MCP server communicates strictly through the standard Model Context Protocol `stdio` transport.
-* The server makes zero outbound HTTP/HTTPS requests during memory indexing, embedding generation, or retrieval.
+Local Brain is designed as a local-first MCP server. Security-sensitive changes should preserve the project's privacy model and should be reviewed for filesystem boundaries, process execution, SQLite access, and handling of repository history.
 
-### 3. Path Traversal & Filesystem Boundaries
-* All file paths supplied through MCP tools (`brain_recall`, `brain_learn`, `brain_trace`) and CLI arguments are sanitized via `sanitizeFilePath()` to prevent directory traversal attacks (e.g. `../../` or absolute path escapes).
-* Filesystem reads are strictly confined to the active repository root.
+Do not treat this document as a guarantee that every deployment or integration is risk-free. Review the implementation and your own environment before using the software with sensitive repositories.
 
-### 4. SQL Injection Protections
-* All SQLite database queries strictly utilize parameterized prepared statements via `better-sqlite3`. No dynamic SQL string concatenation is permitted.
+## Reporting a vulnerability
 
-### 5. Git Command Safety
-* Git operations use argument arrays with `simple-git` rather than shell string interpolation to prevent command injection.
+Please **do not** open a public GitHub issue for a suspected security vulnerability.
 
----
+Use GitHub's private vulnerability reporting feature:
 
-## Sensitive Data Considerations
+https://github.com/cosmiccoder200x-sys/local-brain-mcp/security/advisories/new
 
-* Local Brain indexes commit messages and file diffs from high-signal commits (fixes, refactors, architecture changes).
-* Do not commit secrets, API keys, passwords, or credentials to your Git history.
-* If sensitive information was previously stored in the local brain, it can be purged using `brain_forget` (by ID), `brain_prune` (by status), or by deleting the local `.git/brain.db` file.
+If private reporting is unavailable, contact the maintainer through the contact options on the GitHub profile:
 
----
+https://github.com/cosmiccoder200x-sys
 
-## Reporting Vulnerabilities
+Include, where possible:
 
-If you discover a security vulnerability in `local-brain-mcp`, please report it responsibly:
+- A clear description of the vulnerability and its potential impact.
+- The affected version, commit, or component.
+- Reproduction steps or a proof of concept, if safe to share.
+- Any suggested mitigation.
 
-* **Email:** Open an advisory on GitHub or email security@cosmiccoder.dev.
-* Please provide a reproducible proof-of-concept.
-* We aim to acknowledge receipt within 48 hours and provide a patch promptly.
+Do not include real credentials, private user data, or production secrets in a report. Please allow reasonable time for investigation and a fix before publicly disclosing the issue.
+
+## Scope
+
+Reports involving data exposure, path traversal, command execution, unsafe database handling, dependency vulnerabilities, or unexpected network access are especially relevant to this project.
+
+The maintainer will coordinate investigation, remediation, and disclosure with the reporter.
