@@ -1,5 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync, statSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,17 +9,28 @@ import { recallMemories, traceFile } from '../dist/recall.js';
 import { sanitizeFilePath } from '../dist/scoping.js';
 
 let tempDir;
+let dbPath;
 let db;
 
 before(async () => {
   tempDir = await mkdtemp(path.join(os.tmpdir(), 'local-brain-security-test-'));
-  const dbPath = path.join(tempDir, 'brain.db');
+  dbPath = path.join(tempDir, 'brain.db');
   db = getDb(dbPath);
 });
 
 after(async () => {
   closeDb();
   await rm(tempDir, { recursive: true, force: true });
+});
+
+test('database and existing WAL sidecars are owner-only on POSIX', () => {
+  if (process.platform === 'win32') return;
+
+  for (const filePath of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`]) {
+    if (!existsSync(filePath)) continue;
+    const mode = statSync(filePath).mode & 0o777;
+    assert.equal(mode, 0o600, `${path.basename(filePath)} must be readable/writable only by its owner`);
+  }
 });
 
 test('SQL injection in search queries is safely parameterized', async () => {
