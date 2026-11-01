@@ -1,98 +1,115 @@
-# Contributing to local-brain-mcp
+# Contributing to Local Brain MCP
 
-Thank you for your interest in contributing to `local-brain-mcp`! We welcome bug fixes, documentation improvements, and architectural enhancements that adhere to our local-first, privacy-focused principles.
+Thank you for helping improve Local Brain MCP! Contributions of all sizes are welcome: bug fixes, tests, documentation, examples, integrations, and performance improvements.
 
----
+Local Brain is **local-first and privacy-focused**. Contributions should preserve those principles.
 
-## Development Setup
+## Before you start
 
-### Prerequisites
-- **Node.js**: `>= 22.0.0`
-- **npm**: `>= 9.0.0`
-- **Git**: `>= 2.30.0`
+- Read the [README](README.md) to understand the project and its commands.
+- Check [open issues](https://github.com/cosmiccoder200x-sys/local-brain-mcp/issues) and existing pull requests before starting work.
+- For a large change, open an issue first so we can agree on the problem and approach.
+- If you want to work on an issue, leave a comment so other contributors know it is being handled.
 
-### Clone & Install
+Good first contributions include improving examples, adding focused tests, clarifying error messages, and fixing documentation gaps.
+
+## Development setup
+
+### Requirements
+
+- Node.js **22 or newer**
+- npm **9 or newer**
+- Git **2.30 or newer**
+
+### Fork and clone
+
+1. Fork this repository on GitHub.
+2. Clone your fork and enter the project:
+
 ```bash
-git clone https://github.com/cosmiccoder200x-sys/local-brain-mcp.git
+git clone https://github.com/<your-github-username>/local-brain-mcp.git
 cd local-brain-mcp
 npm install
 ```
 
-### Build
+3. Add the upstream repository:
+
 ```bash
-npm run build
+git remote add upstream https://github.com/cosmiccoder200x-sys/local-brain-mcp.git
 ```
 
-### Type Check
+4. Create a focused branch from the latest main:
+
+```bash
+git fetch upstream
+git switch -c feat/short-description upstream/main
+```
+
+Use `fix/`, `docs/`, `test/`, or `chore/` instead of `feat/` when that better describes the change.
+
+## Make and verify your change
+
+Run the checks relevant to your change before opening a pull request:
+
 ```bash
 npm run typecheck
-```
-
-### Run Tests
-```bash
+npm run build
 npm test
+npm run lint
 ```
 
-### Lint
-ESLint is configured in `eslint.config.js`. Run it with:
+For changes that affect retrieval quality or performance, also consider:
+
 ```bash
-npx eslint src/
+npm run eval
+npm run benchmark
 ```
 
----
+Do not claim a check passed unless you ran it and it completed successfully. If a check cannot be run, say why in your pull request.
 
-## Code Style Guidelines
+### Tests
 
-- **TypeScript strict mode** — No `any` types, no `@ts-ignore`. All code must pass `tsc --noEmit` cleanly.
-- **ESM only** — All source files use ES module syntax (`import`/`export`). No CommonJS (`require`).
-- **2-space indentation** — Consistent across all source files.
-- **No external network calls** — All computation must be local and deterministic. Never introduce dependencies that phone home or require cloud API keys.
-- **Parameterized SQL** — All database queries must use parameterized statements to prevent injection.
-- **Path sanitization** — Use `sanitizeFilePath()` from `scoping.ts` for any user-supplied file paths.
-- **Synchronous SQLite** — Database operations use `better-sqlite3` (synchronous, WAL mode).
+- Add regression tests for bug fixes.
+- Add unit or integration tests for new behavior.
+- Cover invalid input and failure paths, not only the happy path.
+- Keep tests deterministic and independent of external services.
 
----
+## Project conventions
 
-## How to Add a New MCP Tool
+- **TypeScript and ESM:** follow the existing strict TypeScript and ES module patterns.
+- **Privacy:** do not add telemetry, unexpected network requests, cloud dependencies, or source-code uploads.
+- **Database safety:** use parameterized SQL and preserve existing data unless a migration explicitly requires otherwise.
+- **Input validation:** validate MCP inputs and sanitize user-controlled paths with the existing path utilities.
+- **Dependencies:** avoid adding dependencies when the platform or existing packages already solve the problem. Explain any new dependency in the PR.
+- **Compatibility:** consider supported Node.js versions and Windows, macOS, and Linux behavior.
+- **Scope:** keep each pull request focused on one logical change.
 
-1. **Define the tool schema** in `src/mcp-server.ts` inside the `MCP_TOOLS` array:
-   - `name`: prefixed with `brain_` (e.g. `brain_search`).
-   - `description`: clear, actionable text for AI agents.
-   - `annotations`: set `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`.
-   - `inputSchema`: JSON Schema for the tool's parameters.
+## Pull request checklist
 
-2. **Add the handler** in the `CallToolRequestSchema` handler block, following the existing `if (name === 'brain_*')` pattern.
+Before submitting:
 
-3. **Add tests** in `tests/` covering:
-   - Successful invocation with valid inputs.
-   - Error cases (missing required params, invalid values).
-   - Edge cases (empty strings, special characters in paths).
+- [ ] The change solves a clearly described problem.
+- [ ] Tests were added or updated where appropriate.
+- [ ] Relevant checks were run and their actual results are included.
+- [ ] Documentation and examples are updated if behavior changed.
+- [ ] No secrets, credentials, personal data, or generated database files are included.
+- [ ] The PR is focused and linked to an issue when one exists.
 
-4. **Update documentation** — Add the tool to `README.md` and `docs/architecture.md`.
+In the PR description, explain:
 
----
+1. **Problem:** what is currently difficult or broken?
+2. **Solution:** what did you change and why?
+3. **Verification:** which commands did you run, and what happened?
+4. **Compatibility/security:** are there migration, platform, privacy, or security implications?
 
-## Pull Request Guidelines
+Open your pull request against `main`. A maintainer will review it and may request changes before it is merged.
 
-1. Create a feature branch: `git checkout -b feat/my-improvement`.
-2. Implement your changes with accompanying tests.
-3. Verify that all checks pass:
-   ```bash
-   npm run typecheck
-   npm test
-   npm run build
-   ```
-4. Open a Pull Request describing:
-   - **Motivation** — What problem does this solve?
-   - **Approach** — How does the solution work?
-   - **Test results** — What tests were run and their outcomes.
-5. Keep PRs focused — one logical change per PR.
+## Reporting security vulnerabilities
 
----
+Please **do not** report exploitable vulnerabilities in public issues. Follow the private reporting instructions in [SECURITY.md](SECURITY.md).
 
-## Core Principles
+## Community expectations
 
-1. **Local-First Always**: Never introduce dependencies that make external network calls, transmit telemetry, or require cloud API keys.
-2. **Deterministic & Fast**: Embeddings and ranking algorithms must remain deterministic and operate with sub-millisecond execution.
-3. **Test Coverage**: Every new tool, parameter, or bug fix must include tests in `tests/`.
-4. **Security Defenses**: Sanitize all file paths, use parameterized SQL queries, and validate all MCP inputs.
+By participating, you agree to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
+
+Thank you for contributing to Local Brain MCP!
