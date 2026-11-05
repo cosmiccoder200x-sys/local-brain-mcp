@@ -1,17 +1,27 @@
 ---
 name: Feature request
-about: Suggest an improvement
+about: Propose an improvement or new capability
+title: "[Feature]: "
 labels: enhancement
+assignees: ""
 ---
 
-## Problem
+## Is your idea related to a problem?
 
-<!-- What can't you do today? -->
+Describe the problem or limitation you are experiencing.
 
-## Proposal
+## Proposed solution
 
-<!-- What should change? API sketch welcome, e.g. new tool params or CLI flags. -->
+Explain what you would like Local Brain MCP to do. Include a CLI example, MCP tool sketch, or API shape if useful.
 
 ## Alternatives considered
 
-<!-- Any other approaches? -->
+Describe any alternatives or workarounds you have considered.
+
+## Local-first and privacy impact
+
+Would this require network access, telemetry, cloud services, or sending project data outside the machine? Explain.
+
+## Additional context
+
+Add examples, references, or related issues.

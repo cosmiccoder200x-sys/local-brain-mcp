@@ -296,7 +296,15 @@ for namespaced debug output.
 
 ## Contributing
 
-Local Brain MCP is published under the permissive MIT License. Contributions, issue reports, and integrations are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev setup and PR guidelines.
+Contributions are welcome — from first-time documentation fixes to code, tests, integrations, and performance improvements.
+
+1. Browse [open issues](https://github.com/cosmiccoder200x-sys/local-brain-mcp/issues) and look for issues marked `good first issue` or `help wanted`.
+2. For a substantial change, open an issue first to discuss the approach.
+3. Read the [contributor guide](CONTRIBUTING.md), make a focused branch, and include tests where appropriate.
+4. Open a pull request against `main` and describe how you verified the change.
+
+Please also read our [Code of Conduct](CODE_OF_CONDUCT.md). To report a security vulnerability privately, follow [SECURITY.md](SECURITY.md).
+
 
 ---
 

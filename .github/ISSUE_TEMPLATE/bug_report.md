@@ -1,25 +1,41 @@
 ---
 name: Bug report
-about: Something isn't working
+about: Report a reproducible problem
+title: "[Bug]: "
 labels: bug
+assignees: ""
 ---
 
 ## What happened?
 
-<!-- What did you do, and what went wrong? Include the exact command. -->
+Describe the problem and what you expected to happen.
+
+## Steps to reproduce
+
+1.
+2.
+3.
+
+## Command or MCP operation
+
+Paste the exact command, tool name, and relevant input. Remove secrets and private data.
 
 ## Environment
 
-- `local-brain --version`:
+- Local Brain version (`local-brain --version`):
 - Node.js (`node --version`):
-- OS:
-- Editor (Claude Code / Cursor / Windsurf / …):
+- Operating system and version:
+- AI editor/client:
+- Installation method (npm / source):
 
-## Debug output
+## Logs
 
-<!-- Re-run with namespaced logging and paste relevant lines:
-     DEBUG=local-brain:* local-brain <command> -->
+Include relevant output. If useful, run with `DEBUG=local-brain:*`. Redact tokens, credentials, private paths, and personal information.
+
+```text
 
 ```
-<paste here>
-```
+
+## Additional context
+
+Add screenshots, a minimal reproduction, or anything else that may help diagnose the issue.

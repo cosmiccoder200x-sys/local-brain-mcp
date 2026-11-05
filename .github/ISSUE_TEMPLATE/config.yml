@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation and troubleshooting
+    url: https://github.com/cosmiccoder200x-sys/local-brain-mcp#readme
+    about: Check installation, usage, and troubleshooting guidance before opening an issue.
+  - name: Security vulnerability
+    url: https://github.com/cosmiccoder200x-sys/local-brain-mcp/security/advisories/new
+    about: Report security vulnerabilities privately. Do not post them in public issues.
